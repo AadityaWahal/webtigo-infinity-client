@@ -813,7 +813,7 @@ export default function CanvasBoard() {
         }}>
 
             {/* Floating Toolbar Container - Expandable Mobile Dock */}
-            <div className="absolute bottom-24 sm:bottom-auto sm:top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col-reverse sm:flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
+            <div className="absolute bottom-6 sm:bottom-auto sm:top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col-reverse sm:flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
 
                 {/* Mobile Toggle Button */}
                 <div className="sm:hidden pointer-events-auto mt-2">
@@ -879,7 +879,7 @@ export default function CanvasBoard() {
 
                 {/* Image Settings Submenu */}
                 {tool === 'image' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-top-2 fade-in min-w-[250px]">
+                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[250px]">
                         {!stagedImageUrl && (
                             <label className="flex items-center gap-2 px-6 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap">
                                 <ImageIcon size={20} /> Upload Image
@@ -899,7 +899,7 @@ export default function CanvasBoard() {
 
                 {/* Voice Settings Submenu */}
                 {tool === 'voice' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-top-2 fade-in min-w-[250px]">
+                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[250px]">
                         {!isRecording && !recordedAudioUrl && (
                             <button onClick={startRecording} className="flex items-center gap-2 px-6 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-bold transition-all shadow-sm">
                                 <Mic size={20} /> Start Recording
@@ -925,7 +925,7 @@ export default function CanvasBoard() {
 
                 {/* Pen Settings Submenu */}
                 {tool === 'pen' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-top-2 fade-in min-w-[300px]">
+                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[300px]">
 
                         {/* Colors */}
                         <div className="flex items-center gap-3 w-full justify-between">
@@ -989,7 +989,7 @@ export default function CanvasBoard() {
 
                 {/* Shape Settings Submenu */}
                 {tool === 'shape' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-top-2 fade-in min-w-[300px]">
+                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[300px]">
 
                         {/* Shape Types */}
                         <div className="flex items-center gap-3 w-full justify-between">
@@ -1036,7 +1036,7 @@ export default function CanvasBoard() {
             </div>
 
             {/* Info Panel & Live X/Y Coordinator */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:bottom-auto sm:top-4 sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 w-[95vw] sm:w-auto sm:min-w-[280px] border border-zinc-200 text-sm flex flex-col gap-2">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 w-[95vw] sm:w-auto sm:min-w-[280px] border border-zinc-200 text-sm flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2">
                     <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none">♾️ Infinite Canvas</h3>
                     <form
