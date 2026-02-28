@@ -812,8 +812,8 @@ export default function CanvasBoard() {
         }}>
 
             {/* Floating Toolbar Container */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3 pointer-events-none">
-                <div className="bg-white shadow-xl rounded-full px-4 py-2 flex items-center gap-2 border border-zinc-200 pointer-events-auto">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
+                <div className="bg-white shadow-xl rounded-full px-2 sm:px-4 py-2 flex items-center gap-1 sm:gap-2 border border-zinc-200 pointer-events-auto max-w-full overflow-x-auto overflow-y-hidden">
                     <button
                         onClick={() => { setTool('select'); setActiveTextInput(null); }}
                         className={`p-3 rounded-full transition-all ${tool === 'select' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
@@ -1024,7 +1024,7 @@ export default function CanvasBoard() {
             </div>
 
             {/* Info Panel & Live X/Y Coordinator */}
-            <div className="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-4 min-w-[280px] border border-zinc-200 text-sm flex flex-col gap-2">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:bottom-auto sm:top-4 sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 w-[95vw] sm:w-auto sm:min-w-[280px] border border-zinc-200 text-sm flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2">
                     <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none">♾️ Infinite Canvas</h3>
                     <form
