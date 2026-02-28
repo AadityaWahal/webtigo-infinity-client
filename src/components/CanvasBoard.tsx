@@ -1036,9 +1036,8 @@ export default function CanvasBoard() {
             </div>
 
             {/* Info Panel & Live X/Y Coordinator */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 w-[95vw] sm:w-auto sm:min-w-[280px] border border-zinc-200 text-sm flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-bold text-lg flex items-center gap-2 pointer-events-none">♾️ Infinite Canvas</h3>
+            <div className="absolute bottom-6 right-4 sm:bottom-4 sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 min-w-[120px] sm:min-w-[150px] border border-zinc-200 text-sm flex flex-col gap-2">
+                <div className="flex flex-col items-center gap-2">
                     <form
                         onSubmit={(e) => {
                             e.preventDefault();
