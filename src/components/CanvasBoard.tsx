@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Stage, Layer, Line, Image as KonvaImage, Circle, Text as KonvaText, Rect, Ellipse, Transformer } from 'react-konva';
 import { v4 as uuidv4 } from 'uuid';
 import { socket } from '@/lib/socket';
-import { Hand, Pencil, Type, Mic, Square, Image as ImageIcon, MousePointer2, Shapes, Circle as CircleIcon } from 'lucide-react';
+import { Hand, Pencil, Type, Mic, Square, Image as ImageIcon, MousePointer2, Shapes, Circle as CircleIcon, Wrench, X } from 'lucide-react';
 import useImage from 'use-image';
 
 // Types
@@ -163,6 +163,7 @@ export default function CanvasBoard() {
     const [scale, setScale] = useState(1);
     const [pointerPos, setPointerPos] = useState({ x: 0, y: 0 });
     const [isNavigating, setIsNavigating] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
     // Shape State
@@ -811,9 +812,20 @@ export default function CanvasBoard() {
             backgroundPosition: `${stagePos.x}px ${stagePos.y}px`
         }}>
 
-            {/* Floating Toolbar Container */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
-                <div className="bg-white shadow-xl rounded-full px-2 sm:px-4 py-2 flex items-center gap-1 sm:gap-2 border border-zinc-200 pointer-events-auto max-w-full overflow-x-auto overflow-y-hidden">
+            {/* Floating Toolbar Container - Expandable Mobile Dock */}
+            <div className="absolute bottom-24 sm:bottom-auto sm:top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col-reverse sm:flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
+
+                {/* Mobile Toggle Button */}
+                <div className="sm:hidden pointer-events-auto mt-2">
+                    <button
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        className={`text-white shadow-2xl rounded-full p-4 flex items-center justify-center transition-all duration-300 ${isMobileMenuOpen ? 'bg-zinc-800 rotate-90 scale-100' : 'bg-blue-600 rotate-0 scale-105'}`}
+                    >
+                        {isMobileMenuOpen ? <X size={24} /> : <Wrench size={24} />}
+                    </button>
+                </div>
+
+                <div className={`bg-white shadow-2xl rounded-3xl sm:rounded-full px-2 sm:px-4 py-2 items-center gap-1 sm:gap-2 border border-zinc-200 pointer-events-auto max-w-[95vw] overflow-x-auto overflow-y-hidden transition-all duration-300 origin-bottom sm:origin-top ${isMobileMenuOpen ? 'flex scale-100 opacity-100' : 'hidden sm:flex scale-95 opacity-0 sm:scale-100 sm:opacity-100'}`}>
                     <button
                         onClick={() => { setTool('select'); setActiveTextInput(null); }}
                         className={`p-3 rounded-full transition-all ${tool === 'select' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
