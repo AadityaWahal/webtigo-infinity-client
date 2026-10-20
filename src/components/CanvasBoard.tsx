@@ -15,15 +15,13 @@ import {
   Sliders,
   Rocket,
   Compass,
-  Zap,
-  RotateCcw,
-  Trash2,
   MapPin,
-  ChevronUp,
   X,
   Wifi,
   WifiOff,
   Flame,
+  Trash2,
+  Check,
 } from 'lucide-react';
 
 // -------------------------------------------------------------
@@ -40,7 +38,6 @@ interface Point {
 interface CanvasElement {
   id: string;
   type: 'stroke' | 'shape' | 'fill';
-  tool?: string;
   points?: Point[];
   shapeType?: ShapeType;
   startX?: number;
@@ -53,24 +50,23 @@ interface CanvasElement {
   isFilled?: boolean;
 }
 
-// Preset color palette
 const PRESET_COLORS = [
-  '#ffffff', // Pure White
-  '#38bdf8', // Electric Cyan
-  '#818cf8', // Cosmic Indigo
-  '#a855f7', // Neon Purple
-  '#ec4899', // Hyper Pink
-  '#ef4444', // Solar Red
-  '#f59e0b', // Amber Flame
-  '#10b981', // Matrix Emerald
-  '#06b6d4', // Deep Teal
+  '#ffffff', // White
+  '#38bdf8', // Cyan
+  '#818cf8', // Indigo
+  '#a855f7', // Purple
+  '#ec4899', // Pink
+  '#ef4444', // Red
+  '#f59e0b', // Amber
+  '#10b981', // Emerald
+  '#06b6d4', // Teal
   '#64748b', // Slate
 ];
 
 const PRESET_SIZES = [
   { label: 'Fine', value: 2 },
   { label: 'Medium', value: 6 },
-  { label: 'Thick', value: 14 },
+  { label: 'Bold', value: 14 },
   { label: 'Marker', value: 28 },
 ];
 
@@ -78,14 +74,13 @@ export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // -----------------------------------------------------------
-  // Canvas Viewport State (Pan & Zoom)
+  // Viewport Pan & Zoom State
   // -----------------------------------------------------------
   const [panOffset, setPanOffset] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState<number>(1);
   const panOffsetRef = useRef<Point>({ x: 0, y: 0 });
   const zoomRef = useRef<number>(1);
 
-  // Keep refs synchronized for animation loops
   useEffect(() => {
     panOffsetRef.current = panOffset;
   }, [panOffset]);
@@ -95,7 +90,7 @@ export default function CanvasBoard() {
   }, [zoom]);
 
   // -----------------------------------------------------------
-  // Drawing & Elements State
+  // Canvas Elements & Tools State
   // -----------------------------------------------------------
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const elementsRef = useRef<CanvasElement[]>([]);
@@ -114,14 +109,14 @@ export default function CanvasBoard() {
   const currentStroke = useRef<Point[]>([]);
 
   // -----------------------------------------------------------
-  // Socket & Sync State
+  // Socket & Sync Status
   // -----------------------------------------------------------
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(1);
-  const [pingMs, setPingMs] = useState<number | null>(null);
+  const [pingLatency, setPingLatency] = useState<number | null>(null);
 
   // -----------------------------------------------------------
-  // Coordinate Teleport HUD State (Top-Left)
+  // Top-Left Coordinates & Teleport State
   // -----------------------------------------------------------
   const [cursorWorldPos, setCursorWorldPos] = useState<Point>({ x: 0, y: 0 });
   const [isTeleportOpen, setIsTeleportOpen] = useState(false);
@@ -129,23 +124,23 @@ export default function CanvasBoard() {
   const [teleportY, setTeleportY] = useState<string>('0');
 
   // -----------------------------------------------------------
-  // Bottom Radial Hub State (Middle-Bottom)
+  // Middle-Bottom Simulator Radial Hub State
   // -----------------------------------------------------------
   const [isRadialOpen, setIsRadialOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<'size' | 'color' | 'shape' | 'fill' | 'eraser' | null>(null);
 
   // -----------------------------------------------------------
-  // Rocket / Jet Speed Mode State (Bottom-Right)
+  // Bottom-Right Rocket Jet Mode State
   // -----------------------------------------------------------
   const [isRocketMode, setIsRocketMode] = useState(false);
-  const [rocketSpeed, setRocketSpeed] = useState<number>(18); // Pixels per frame multiplier
+  const [rocketSpeed, setRocketSpeed] = useState<number>(18);
   const [rocketAngle, setRocketAngle] = useState<number>(0);
   const [isThrusting, setIsThrusting] = useState(false);
   const mouseScreenPos = useRef<Point>({ x: 0, y: 0 });
   const animationFrameId = useRef<number | null>(null);
 
   // -----------------------------------------------------------
-  // Coordinate Transformations
+  // Coordinate Conversions
   // -----------------------------------------------------------
   const screenToWorld = useCallback((screenX: number, screenY: number): Point => {
     return {
@@ -161,9 +156,7 @@ export default function CanvasBoard() {
     };
   }, []);
 
-  // -----------------------------------------------------------
-  // Teleportation Functionality
-  // -----------------------------------------------------------
+  // Teleport viewport
   const teleportTo = useCallback((targetX: number, targetY: number) => {
     if (typeof window === 'undefined') return;
     const centerX = window.innerWidth / 2;
@@ -177,7 +170,7 @@ export default function CanvasBoard() {
   }, []);
 
   // -----------------------------------------------------------
-  // Canvas Rendering Loop
+  // Canvas Renderer
   // -----------------------------------------------------------
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -185,16 +178,15 @@ export default function CanvasBoard() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Reset transform & clear
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Canvas background
-    ctx.fillStyle = '#0a0c10';
+    // Dark Obsidian Canvas Background
+    ctx.fillStyle = '#07090e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Infinite Dot Grid Matrix
-    const gridSize = 40 * zoom;
+    // Infinite Dot Matrix Grid
+    const gridSize = 36 * zoom;
     const offsetX = panOffset.x % gridSize;
     const offsetY = panOffset.y % gridSize;
 
@@ -202,14 +194,14 @@ export default function CanvasBoard() {
     for (let x = offsetX; x < canvas.width; x += gridSize) {
       for (let y = offsetY; y < canvas.height; y += gridSize) {
         ctx.beginPath();
-        ctx.arc(x, y, 1.2 * Math.min(zoom, 1.8), 0, Math.PI * 2);
+        ctx.arc(x, y, 1.2 * Math.min(zoom, 1.5), 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // Origin (0,0) subtle coordinate crosshairs
+    // World Origin (0,0) Subtle Axis Lines
     const origin = worldToScreen(0, 0);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -220,12 +212,12 @@ export default function CanvasBoard() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Apply viewport transformation for drawing world elements
+    // Transform Context for World Elements
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // Draw all persisted elements
+    // Draw Elements
     elementsRef.current.forEach((el) => {
       ctx.save();
       ctx.strokeStyle = el.color;
@@ -241,7 +233,13 @@ export default function CanvasBoard() {
           ctx.lineTo(el.points[i].x, el.points[i].y);
         }
         ctx.stroke();
-      } else if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined && el.endX !== undefined && el.endY !== undefined) {
+      } else if (
+        el.type === 'shape' &&
+        el.startX !== undefined &&
+        el.startY !== undefined &&
+        el.endX !== undefined &&
+        el.endY !== undefined
+      ) {
         const sx = el.startX;
         const sy = el.startY;
         const ex = el.endX;
@@ -268,11 +266,9 @@ export default function CanvasBoard() {
           ctx.lineTo(ex, ey);
           ctx.stroke();
         } else if (el.shapeType === 'arrow') {
-          // Draw line
           ctx.moveTo(sx, sy);
           ctx.lineTo(ex, ey);
           ctx.stroke();
-          // Draw arrowhead
           const angle = Math.atan2(ey - sy, ex - sx);
           const headlen = 16 / zoom;
           ctx.beginPath();
@@ -296,7 +292,6 @@ export default function CanvasBoard() {
             let y = cy + Math.sin(rot) * r;
             ctx.lineTo(x, y);
             rot += step;
-
             x = cx + Math.cos(rot) * (r / 2);
             y = cy + Math.sin(rot) * (r / 2);
             ctx.lineTo(x, y);
@@ -314,7 +309,7 @@ export default function CanvasBoard() {
     ctx.restore();
   }, [panOffset, zoom, worldToScreen]);
 
-  // Keep canvas resized to full viewport
+  // Resize handler
   useEffect(() => {
     const handleResize = () => {
       if (!canvasRef.current) return;
@@ -332,7 +327,7 @@ export default function CanvasBoard() {
   }, [elements, panOffset, zoom, renderCanvas]);
 
   // -----------------------------------------------------------
-  // Rocket Mode Physics Loop (Edge Proximity Acceleration)
+  // Rocket Mode 2D Physics Loop (Edge Proximity Acceleration)
   // -----------------------------------------------------------
   useEffect(() => {
     if (!isRocketMode) {
@@ -341,7 +336,7 @@ export default function CanvasBoard() {
       return;
     }
 
-    const proximityThreshold = 140; // Pixels from border to engage thrusters
+    const proximityThreshold = 140; // Pixels from viewport edges
 
     const rocketTick = () => {
       const { innerWidth: width, innerHeight: height } = window;
@@ -351,7 +346,7 @@ export default function CanvasBoard() {
       let dx = 0;
       let dy = 0;
 
-      // Check Proximity to Edges
+      // Accelerate towards whichever edge the mouse is near
       if (mouseX < proximityThreshold) {
         const factor = (proximityThreshold - mouseX) / proximityThreshold;
         dx += factor * rocketSpeed;
@@ -370,7 +365,6 @@ export default function CanvasBoard() {
 
       if (dx !== 0 || dy !== 0) {
         setIsThrusting(true);
-        // Compute angle for rocket pointing direction (-dx, -dy)
         const angleDeg = (Math.atan2(-dy, -dx) * 180) / Math.PI + 90;
         setRocketAngle(angleDeg);
 
@@ -398,7 +392,7 @@ export default function CanvasBoard() {
     const onConnect = () => {
       setIsConnected(true);
       const start = Date.now();
-      socket.emit('endlessync:ping', () => setPingMs(Date.now() - start));
+      socket.emit('endlessync:ping', () => setPingLatency(Date.now() - start));
     };
 
     const onDisconnect = () => setIsConnected(false);
@@ -457,7 +451,7 @@ export default function CanvasBoard() {
   }, []);
 
   // -----------------------------------------------------------
-  // Mouse & Pointer Event Handlers
+  // Pointer Events & Drawing Handlers
   // -----------------------------------------------------------
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     isInteracting.current = true;
@@ -469,7 +463,6 @@ export default function CanvasBoard() {
     } else if (activeTool === 'eraser') {
       eraseAtPoint(worldPoint);
     } else if (activeTool === 'fill') {
-      // Toggle fill bucket on clicked shape or background
       const clicked = findElementNearPoint(worldPoint);
       if (clicked && clicked.type === 'shape') {
         const updated: CanvasElement = { ...clicked, isFilled: true, fillColor };
@@ -494,7 +487,7 @@ export default function CanvasBoard() {
     } else if (activeTool === 'pen') {
       currentStroke.current.push(worldPoint);
 
-      // Render in-progress stroke directly for ultra-low latency
+      // Fast immediate stroke preview
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -520,7 +513,6 @@ export default function CanvasBoard() {
     } else if (activeTool === 'eraser') {
       eraseAtPoint(worldPoint);
     } else if (activeTool === 'shape') {
-      // Preview shape during drag
       renderCanvas();
       const canvas = canvasRef.current;
       if (canvas) {
@@ -603,13 +595,11 @@ export default function CanvasBoard() {
     }
   };
 
-  // Wheel zoom
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
     const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.15), 5);
 
-    // Zoom centered on cursor position
     const mouseX = e.clientX;
     const mouseY = e.clientY;
 
@@ -620,9 +610,8 @@ export default function CanvasBoard() {
     setPanOffset({ x: newPanX, y: newPanY });
   };
 
-  // Erase detection
   const eraseAtPoint = (point: Point) => {
-    const radius = 20 / zoom;
+    const radius = 24 / zoom;
     const target = elementsRef.current.find((el) => {
       if (el.type === 'stroke' && el.points) {
         return el.points.some((p) => Math.hypot(p.x - point.x, p.y - point.y) < radius);
@@ -655,25 +644,21 @@ export default function CanvasBoard() {
     );
   };
 
-  // Clear canvas
   const handleClear = () => {
-    if (confirm('Clear entire shared board?')) {
+    if (confirm('Clear entire canvas?')) {
       setElements([]);
       socket.emit('canvas:clear');
     }
   };
 
-  // -----------------------------------------------------------
-  // Central Radial Pen Activation Handler
-  // -----------------------------------------------------------
+  // Main Pen button click:
+  // "when clicked on pen icon, the first default one automatically select, no need to click on the 5 icons before that"
   const handleMainPenClick = () => {
     if (activeTool === 'pen') {
-      // Toggle off to pan
       setActiveTool('pan');
       setIsRadialOpen(false);
       setActivePanel(null);
     } else {
-      // Per instructions: "when clicked on pen icon the first default one automatically select, no need to click on the 5 icons before that"
       setActiveTool('pen');
       setIsRadialOpen(true);
       setActivePanel(null);
@@ -693,26 +678,45 @@ export default function CanvasBoard() {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#0a0c10] select-none text-slate-100 font-sans">
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: '#07090e' }}>
       {/* ----------------------------------------------------------- */}
-      {/* 1. TOP-LEFT: Real-Time Coordinates HUD & Teleport Box */}
+      {/* 1. TOP-LEFT HUD: Fixed Coordinates + Teleport Box           */}
       {/* ----------------------------------------------------------- */}
-      <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
-        <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl backdrop-blur-xl bg-slate-900/80 border border-slate-700/80 shadow-2xl">
-          <MapPin className="w-4 h-4 text-cyan-400 animate-pulse" />
-          <div className="font-mono text-xs flex items-center gap-3">
-            <span className="text-slate-400">
-              X: <strong className="text-slate-100">{Math.round(cursorWorldPos.x)}</strong>
+      <div
+        className="dock-top-left interactive"
+        style={{
+          position: 'fixed',
+          top: 18,
+          left: 18,
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <div
+          className="glass-surface"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 14px',
+            borderRadius: 16,
+          }}
+        >
+          <MapPin style={{ width: 16, height: 16, color: '#38bdf8' }} />
+          <div style={{ fontFamily: 'monospace', fontSize: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: '#94a3b8' }}>
+              X: <strong style={{ color: '#f8fafc' }}>{Math.round(cursorWorldPos.x)}</strong>
             </span>
-            <span className="text-slate-400">
-              Y: <strong className="text-slate-100">{Math.round(cursorWorldPos.y)}</strong>
+            <span style={{ color: '#94a3b8' }}>
+              Y: <strong style={{ color: '#f8fafc' }}>{Math.round(cursorWorldPos.y)}</strong>
             </span>
-            <span className="text-indigo-400/80 border-l border-slate-700 pl-2">
+            <span style={{ color: '#818cf8', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 8 }}>
               {Math.round(zoom * 100)}%
             </span>
           </div>
 
-          {/* Edit/Teleport Trigger Button */}
           <button
             onClick={() => {
               setTeleportX(String(Math.round(cursorWorldPos.x)));
@@ -720,63 +724,126 @@ export default function CanvasBoard() {
               setIsTeleportOpen((prev) => !prev);
             }}
             title="Edit coordinates & teleport"
-            className="ml-1 px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/40 text-[11px] font-semibold text-indigo-300 hover:text-white transition flex items-center gap-1 cursor-pointer"
+            className="btn-hover-scale"
+            style={{
+              padding: '4px 10px',
+              borderRadius: 8,
+              background: 'rgba(99, 102, 241, 0.25)',
+              border: '1px solid rgba(99, 102, 241, 0.4)',
+              color: '#a5b4fc',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
           >
-            <span>Edit</span>
+            Edit
           </button>
         </div>
 
-        {/* Teleport Dropdown Box */}
+        {/* Teleport Dropdown Panel */}
         {isTeleportOpen && (
-          <div className="absolute top-12 left-0 w-72 p-4 rounded-2xl backdrop-blur-2xl bg-slate-900/95 border border-indigo-500/30 shadow-2xl space-y-3 z-40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-cyan-400" /> Teleport to Coordinates
+          <div
+            className="glass-popover"
+            style={{
+              position: 'absolute',
+              top: 48,
+              left: 0,
+              width: 270,
+              padding: 16,
+              borderRadius: 18,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              zIndex: 60,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Compass style={{ width: 15, height: 15, color: '#38bdf8' }} /> Teleport Viewport
               </span>
               <button
                 onClick={() => setIsTeleportOpen(false)}
-                className="text-slate-400 hover:text-white"
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', marginLeft: 'auto' }}
               >
-                <X className="w-3.5 h-3.5" />
+                <X style={{ width: 14, height: 14 }} />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label className="text-[10px] text-slate-400 uppercase font-mono">Target X</label>
+                <label style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', textTransform: 'uppercase' }}>Target X</label>
                 <input
                   type="number"
                   value={teleportX}
                   onChange={(e) => setTeleportX(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && teleportTo(Number(teleportX), Number(teleportY))}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    background: '#111827',
+                    border: '1px solid #374151',
+                    color: '#fff',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    outline: 'none',
+                  }}
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-400 uppercase font-mono">Target Y</label>
+                <label style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', textTransform: 'uppercase' }}>Target Y</label>
                 <input
                   type="number"
                   value={teleportY}
                   onChange={(e) => setTeleportY(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && teleportTo(Number(teleportX), Number(teleportY))}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    background: '#111827',
+                    border: '1px solid #374151',
+                    color: '#fff',
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    outline: 'none',
+                  }}
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button
                 onClick={() => teleportTo(Number(teleportX), Number(teleportY))}
-                className="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 hover:brightness-110 transition cursor-pointer"
+                style={{
+                  flex: 1,
+                  padding: '7px 0',
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                }}
               >
                 Teleport Now
               </button>
               <button
                 onClick={() => teleportTo(0, 0)}
-                title="Reset to origin (0, 0)"
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 transition cursor-pointer"
+                title="Reset to (0, 0)"
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 10,
+                  background: '#1f2937',
+                  border: '1px solid #374151',
+                  color: '#cbd5e1',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
               >
-                Origin (0,0)
+                (0,0)
               </button>
             </div>
           </div>
@@ -784,59 +851,123 @@ export default function CanvasBoard() {
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 2. TOP-RIGHT: Live Connection & Peer Counter */}
+      {/* 2. TOP-RIGHT HUD: Connection State + Clean Canvas Action    */}
       {/* ----------------------------------------------------------- */}
-      <div className="absolute top-4 right-4 z-30 flex items-center gap-3">
+      <div
+        className="dock-top-right interactive"
+        style={{
+          position: 'fixed',
+          top: 18,
+          right: 18,
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
         <div
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-medium backdrop-blur-xl ${
-            isConnected
-              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
-          }`}
+          className="glass-surface"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 14px',
+            borderRadius: 9999,
+            fontSize: 12,
+            fontWeight: 500,
+            color: isConnected ? '#6ee7b7' : '#fca5a5',
+          }}
         >
-          {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-          <span>{isConnected ? 'Live Sync' : 'Offline'}</span>
-          {pingMs !== null && isConnected && (
-            <span className="font-mono text-[11px] opacity-75">{pingMs}ms</span>
+          {isConnected ? (
+            <Wifi style={{ width: 14, height: 14, color: '#10b981' }} />
+          ) : (
+            <WifiOff style={{ width: 14, height: 14, color: '#ef4444' }} />
+          )}
+          <span>{isConnected ? 'Sync Active' : 'Connecting...'}</span>
+          {pingLatency !== null && isConnected && (
+            <span style={{ fontSize: 11, opacity: 0.8, fontFamily: 'monospace', marginLeft: 4 }}>
+              {pingLatency}ms
+            </span>
           )}
         </div>
 
         <button
           onClick={handleClear}
           title="Clear Board"
-          className="p-2 rounded-xl backdrop-blur-xl bg-slate-900/80 hover:bg-rose-900/30 border border-slate-700/80 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+          className="glass-surface btn-hover-scale"
+          style={{
+            padding: 9,
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#94a3b8',
+            cursor: 'pointer',
+          }}
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 style={{ width: 16, height: 16 }} />
         </button>
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 3. MIDDLE-BOTTOM: Simulator Drawing Hub (Big Circular Button + 5 Satellites) */}
+      {/* 3. MIDDLE-BOTTOM: Simulator Hub (Big Center + 5 Satellites)  */}
       {/* ----------------------------------------------------------- */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
-        {/* Floating Rectangular Config Panel (Opens above when satellite is clicked) */}
+      <div
+        className="dock-bottom-center"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        {/* Floating Rectangular Popover (Opens directly above hub) */}
         {activePanel && (
-          <div className="mb-4 p-4 rounded-2xl backdrop-blur-2xl bg-slate-900/95 border border-indigo-500/30 shadow-2xl min-w-[280px] max-w-sm animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-800">
-              <span className="text-xs font-semibold text-white capitalize flex items-center gap-1.5">
-                {activePanel === 'size' && <Sliders className="w-3.5 h-3.5 text-cyan-400" />}
-                {activePanel === 'color' && <Palette className="w-3.5 h-3.5 text-cyan-400" />}
-                {activePanel === 'shape' && <Square className="w-3.5 h-3.5 text-cyan-400" />}
-                {activePanel === 'fill' && <PaintBucket className="w-3.5 h-3.5 text-cyan-400" />}
-                {activePanel === 'eraser' && <Eraser className="w-3.5 h-3.5 text-cyan-400" />}
-                {activePanel} Options
+          <div
+            className="glass-popover interactive"
+            style={{
+              marginBottom: 16,
+              padding: 16,
+              borderRadius: 20,
+              minWidth: 280,
+              maxWidth: 320,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: 10,
+                marginBottom: 12,
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {activePanel === 'size' && <Sliders style={{ width: 14, height: 14, color: '#38bdf8' }} />}
+                {activePanel === 'color' && <Palette style={{ width: 14, height: 14, color: '#818cf8' }} />}
+                {activePanel === 'shape' && <Square style={{ width: 14, height: 14, color: '#a855f7' }} />}
+                {activePanel === 'fill' && <PaintBucket style={{ width: 14, height: 14, color: '#f59e0b' }} />}
+                {activePanel === 'eraser' && <Eraser style={{ width: 14, height: 14, color: '#ef4444' }} />}
+                {activePanel} Settings
               </span>
-              <button onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white">
-                <X className="w-3.5 h-3.5" />
+              <button
+                onClick={() => setActivePanel(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
               </button>
             </div>
 
-            {/* 1. Size / Thickness Panel */}
+            {/* 1. Size Panel */}
             {activePanel === 'size' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-300">
-                  <span>Stroke Width:</span>
-                  <span className="font-mono text-cyan-400 font-bold">{strokeWidth}px</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#cbd5e1' }}>
+                  <span>Thickness:</span>
+                  <span style={{ fontFamily: 'monospace', color: '#38bdf8', fontWeight: 'bold' }}>{strokeWidth}px</span>
                 </div>
                 <input
                   type="range"
@@ -844,30 +975,35 @@ export default function CanvasBoard() {
                   max="48"
                   value={strokeWidth}
                   onChange={(e) => setStrokeWidth(Number(e.target.value))}
-                  className="w-full accent-cyan-400 cursor-pointer"
+                  style={{ width: '100%', cursor: 'pointer', accentColor: '#38bdf8' }}
                 />
-                <div className="grid grid-cols-4 gap-1.5 pt-1">
-                  {PRESET_SIZES.map((preset) => (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                  {PRESET_SIZES.map((p) => (
                     <button
-                      key={preset.label}
-                      onClick={() => setStrokeWidth(preset.value)}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
-                        strokeWidth === preset.value
-                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
-                          : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
-                      }`}
+                      key={p.label}
+                      onClick={() => setStrokeWidth(p.value)}
+                      style={{
+                        padding: '6px 0',
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        border: strokeWidth === p.value ? '1px solid #38bdf8' : '1px solid #374151',
+                        background: strokeWidth === p.value ? 'rgba(56, 189, 248, 0.2)' : '#1f2937',
+                        color: strokeWidth === p.value ? '#38bdf8' : '#94a3b8',
+                        cursor: 'pointer',
+                      }}
                     >
-                      {preset.label}
+                      {p.label}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 2. Color Palette Panel */}
+            {/* 2. Color Panel */}
             {activePanel === 'color' && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-5 gap-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
                   {PRESET_COLORS.map((col) => (
                     <button
                       key={col}
@@ -875,16 +1011,26 @@ export default function CanvasBoard() {
                         setCurrentColor(col);
                         if (isFillActive) setFillColor(col);
                       }}
-                      className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer shadow-md"
+                      className="btn-hover-scale"
                       style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: '50%',
                         backgroundColor: col,
-                        borderColor: currentColor === col ? '#ffffff' : 'transparent',
+                        border: currentColor === col ? '2px solid #ffffff' : '2px solid transparent',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                    />
+                    >
+                      {currentColor === col && <Check style={{ width: 14, height: 14, color: col === '#ffffff' ? '#000' : '#fff' }} />}
+                    </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                  <span className="text-xs text-slate-400">Custom:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>Custom:</span>
                   <input
                     type="color"
                     value={currentColor}
@@ -892,16 +1038,18 @@ export default function CanvasBoard() {
                       setCurrentColor(e.target.value);
                       if (isFillActive) setFillColor(e.target.value);
                     }}
-                    className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border border-slate-700"
+                    style={{ width: 32, height: 32, background: 'transparent', border: 'none', cursor: 'pointer' }}
                   />
-                  <span className="font-mono text-xs text-slate-300 uppercase">{currentColor}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f8fafc', textTransform: 'uppercase' }}>
+                    {currentColor}
+                  </span>
                 </div>
               </div>
             )}
 
             {/* 3. Shapes Panel */}
             {activePanel === 'shape' && (
-              <div className="grid grid-cols-5 gap-2">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
                 {[
                   { type: 'rect' as ShapeType, icon: Square, label: 'Box' },
                   { type: 'circle' as ShapeType, icon: Circle, label: 'Oval' },
@@ -910,6 +1058,7 @@ export default function CanvasBoard() {
                   { type: 'star' as ShapeType, icon: Star, label: 'Star' },
                 ].map((s) => {
                   const Icon = s.icon;
+                  const isSelected = selectedShape === s.type && activeTool === 'shape';
                   return (
                     <button
                       key={s.type}
@@ -917,14 +1066,21 @@ export default function CanvasBoard() {
                         setSelectedShape(s.type);
                         setActiveTool('shape');
                       }}
-                      className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition cursor-pointer ${
-                        selectedShape === s.type && activeTool === 'shape'
-                          ? 'bg-indigo-600/30 border-cyan-400 text-white'
-                          : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
-                      }`}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '8px 4px',
+                        borderRadius: 10,
+                        border: isSelected ? '1px solid #38bdf8' : '1px solid #374151',
+                        background: isSelected ? 'rgba(56, 189, 248, 0.2)' : '#1f2937',
+                        color: isSelected ? '#fff' : '#94a3b8',
+                        cursor: 'pointer',
+                      }}
                     >
-                      <Icon className="w-5 h-5" />
-                      <span className="text-[10px]">{s.label}</span>
+                      <Icon style={{ width: 18, height: 18 }} />
+                      <span style={{ fontSize: 10 }}>{s.label}</span>
                     </button>
                   );
                 })}
@@ -933,171 +1089,249 @@ export default function CanvasBoard() {
 
             {/* 4. Bucket Fill Panel */}
             {activePanel === 'fill' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300">Fill Shapes & Surfaces:</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: '#cbd5e1' }}>Fill Shape Surface:</span>
                   <button
                     onClick={() => setIsFillActive(!isFillActive)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                      isFillActive
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-800 text-slate-400 border border-slate-700'
-                    }`}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 9999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: 'none',
+                      background: isFillActive ? '#10b981' : '#374151',
+                      color: '#fff',
+                      cursor: 'pointer',
+                    }}
                   >
-                    {isFillActive ? 'Enabled' : 'Disabled'}
+                    {isFillActive ? 'Active' : 'Off'}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  When enabled, all newly drawn shapes and clicked areas are automatically filled.
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
+                  Draw shapes with solid color fills or click any existing shape to apply color fill.
                 </p>
               </div>
             )}
 
             {/* 5. Eraser Panel */}
             {activePanel === 'eraser' && (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-300">Precision Eraser Active</p>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Click and drag across any stroke or shape on the canvas to erase it instantly.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 600 }}>Precision Eraser</span>
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
+                  Drag across any stroke or shape on the canvas to erase it instantly.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Radial Satellite Circles Container */}
-        <div className="relative flex items-center justify-center">
-          {/* 5 Animated Surrounding Satellites (Desktop Radial / Mobile Row) */}
-          <div
-            className={`transition-all duration-300 ${
-              isRadialOpen
-                ? 'opacity-100 scale-100 pointer-events-auto'
-                : 'opacity-0 scale-75 pointer-events-none'
-            } flex items-center gap-3 sm:absolute sm:inset-0 sm:items-center sm:justify-center`}
-          >
-            {/* Satellite 1: Size (Top-Left / Offset) */}
+        {/* Central Radial Trigger & Satellites Hub */}
+        <div className="radial-container interactive">
+          {/* 5 Radial Satellites (Desktop Crown Arc / Mobile Row) */}
+          <div className="satellite-wrapper">
+            {/* Satellite 1: Size */}
             <button
               onClick={() => toggleSatellitePanel('size')}
-              title="Pen Size & Style"
-              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:-translate-x-24 sm:-translate-y-12 ${
-                activePanel === 'size'
-                  ? 'bg-cyan-500 border-white text-slate-950 shadow-cyan-500/40'
-                  : 'bg-slate-900/90 border-slate-700 text-cyan-400 hover:text-white'
-              }`}
+              title="Size & Thickness"
+              className={`satellite-btn satellite-1 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activePanel === 'size' ? '#06b6d4' : undefined,
+                color: activePanel === 'size' ? '#fff' : '#38bdf8',
+                cursor: 'pointer',
+              }}
             >
-              <Sliders className="w-5 h-5" />
+              <Sliders style={{ width: 18, height: 18 }} />
             </button>
 
-            {/* Satellite 2: Color (Top / Offset) */}
+            {/* Satellite 2: Color */}
             <button
               onClick={() => toggleSatellitePanel('color')}
               title="Color Palette"
-              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:-translate-x-12 sm:-translate-y-24 ${
-                activePanel === 'color'
-                  ? 'bg-indigo-500 border-white text-white shadow-indigo-500/40'
-                  : 'bg-slate-900/90 border-slate-700 text-indigo-400 hover:text-white'
-              }`}
+              className={`satellite-btn satellite-2 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activePanel === 'color' ? '#6366f1' : undefined,
+                cursor: 'pointer',
+              }}
             >
               <div
-                className="w-5 h-5 rounded-full border border-white/60 shadow-inner"
-                style={{ backgroundColor: currentColor }}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  backgroundColor: currentColor,
+                  border: '2px solid rgba(255,255,255,0.7)',
+                }}
               />
             </button>
 
-            {/* Satellite 3: Shapes (Top-Center / Offset) */}
+            {/* Satellite 3: Shapes */}
             <button
               onClick={() => toggleSatellitePanel('shape')}
               title="Shapes Tool"
-              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-12 sm:-translate-y-24 ${
-                activePanel === 'shape'
-                  ? 'bg-purple-500 border-white text-white shadow-purple-500/40'
-                  : 'bg-slate-900/90 border-slate-700 text-purple-400 hover:text-white'
-              }`}
+              className={`satellite-btn satellite-3 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activePanel === 'shape' ? '#a855f7' : undefined,
+                color: activePanel === 'shape' ? '#fff' : '#c084fc',
+                cursor: 'pointer',
+              }}
             >
-              <Square className="w-5 h-5" />
+              <Square style={{ width: 18, height: 18 }} />
             </button>
 
-            {/* Satellite 4: Bucket (Top-Right / Offset) */}
+            {/* Satellite 4: Bucket Fill */}
             <button
               onClick={() => toggleSatellitePanel('fill')}
               title="Bucket Fill"
-              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-24 sm:-translate-y-12 ${
-                activePanel === 'fill'
-                  ? 'bg-amber-500 border-white text-slate-950 shadow-amber-500/40'
-                  : 'bg-slate-900/90 border-slate-700 text-amber-400 hover:text-white'
-              }`}
+              className={`satellite-btn satellite-4 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activePanel === 'fill' ? '#f59e0b' : undefined,
+                color: activePanel === 'fill' ? '#000' : '#fbbf24',
+                cursor: 'pointer',
+              }}
             >
-              <PaintBucket className="w-5 h-5" />
+              <PaintBucket style={{ width: 18, height: 18 }} />
             </button>
 
-            {/* Satellite 5: Eraser (Right / Offset) */}
+            {/* Satellite 5: Eraser */}
             <button
               onClick={() => toggleSatellitePanel('eraser')}
               title="Eraser"
-              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-32 sm:translate-y-0 ${
-                activePanel === 'eraser'
-                  ? 'bg-rose-500 border-white text-white shadow-rose-500/40'
-                  : 'bg-slate-900/90 border-slate-700 text-rose-400 hover:text-white'
-              }`}
+              className={`satellite-btn satellite-5 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: activePanel === 'eraser' ? '#ef4444' : undefined,
+                color: activePanel === 'eraser' ? '#fff' : '#f87171',
+                cursor: 'pointer',
+              }}
             >
-              <Eraser className="w-5 h-5" />
+              <Eraser style={{ width: 18, height: 18 }} />
             </button>
           </div>
 
           {/* Central Big Circular Pen Button */}
           <button
             onClick={handleMainPenClick}
-            title={activeTool === 'pen' ? 'Drawing Mode Active (Click to Pan)' : 'Start Drawing (Default Pen)'}
-            className={`relative z-10 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 cursor-pointer ${
-              activeTool === 'pen'
-                ? 'bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white shadow-cyan-500/50 ring-4 ring-cyan-400/40'
-                : 'bg-slate-900/90 hover:bg-slate-800 border-2 border-slate-700 text-slate-200'
-            }`}
+            title={activeTool === 'pen' ? 'Drawing Active (Click to Pan)' : 'Start Drawing (Default Pen)'}
+            className="btn-hover-scale"
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              width: 66,
+              height: 66,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: activeTool === 'pen' ? '3px solid #38bdf8' : '2px solid rgba(255,255,255,0.18)',
+              background:
+                activeTool === 'pen'
+                  ? 'linear-gradient(135deg, #06b6d4, #4f46e5, #9333ea)'
+                  : 'rgba(15, 23, 42, 0.9)',
+              color: '#fff',
+              boxShadow:
+                activeTool === 'pen'
+                  ? '0 0 30px rgba(56, 189, 248, 0.6), 0 10px 25px rgba(0,0,0,0.5)'
+                  : '0 12px 24px rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+            }}
           >
-            <Pen className={`w-7 h-7 transition-transform ${activeTool === 'pen' ? 'scale-110' : ''}`} />
-
-            {/* Pulsing indicator ring when drawing active */}
-            {activeTool === 'pen' && (
-              <span className="absolute -inset-1 rounded-full bg-cyan-400/20 animate-ping -z-10" />
-            )}
+            <Pen style={{ width: 26, height: 26, transform: activeTool === 'pen' ? 'scale(1.1)' : 'none' }} />
           </button>
         </div>
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 4. BOTTOM-RIGHT: Rocket Jet Speed Mode & Physics */}
+      {/* 4. BOTTOM-RIGHT: Rocket Jet Speed Controls & Propulsion     */}
       {/* ----------------------------------------------------------- */}
-      <div className="absolute bottom-6 right-6 z-30 flex flex-col items-end gap-3">
-        {/* Rocket Speed Controls (Shows when Rocket Mode is on) */}
+      <div
+        className="dock-bottom-right"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 10,
+          pointerEvents: 'none',
+        }}
+      >
+        {/* Speed Tier Selector (Appears when Rocket mode is active) */}
         {isRocketMode && (
-          <div className="p-3 rounded-2xl backdrop-blur-xl bg-slate-900/90 border border-amber-500/40 shadow-2xl space-y-2 text-xs animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between gap-3 text-slate-300 font-semibold">
-              <span className="flex items-center gap-1.5 text-amber-400">
-                <Flame className={`w-4 h-4 ${isThrusting ? 'animate-bounce text-amber-300' : ''}`} />
-                Jet Thrusters
+          <div
+            className="glass-popover interactive"
+            style={{
+              padding: '10px 14px',
+              borderRadius: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              minWidth: 190,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: '#f59e0b' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Flame style={{ width: 14, height: 14 }} /> Jet Propulsion
               </span>
-              <span className="font-mono text-amber-300">{rocketSpeed}x</span>
+              <span style={{ fontFamily: 'monospace' }}>{rocketSpeed}x</span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div style={{ display: 'flex', gap: 6 }}>
               {[8, 18, 32].map((spd) => (
                 <button
                   key={spd}
                   onClick={() => setRocketSpeed(spd)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer ${
-                    rocketSpeed === spd
-                      ? 'bg-amber-500 text-slate-950'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
+                  style={{
+                    flex: 1,
+                    padding: '4px 0',
+                    borderRadius: 8,
+                    fontSize: 10,
+                    fontWeight: 'bold',
+                    fontFamily: 'monospace',
+                    border: rocketSpeed === spd ? '1px solid #f59e0b' : '1px solid #374151',
+                    background: rocketSpeed === spd ? '#f59e0b' : '#1f2937',
+                    color: rocketSpeed === spd ? '#000' : '#94a3b8',
+                    cursor: 'pointer',
+                  }}
                 >
                   {spd === 8 ? 'Cruiser' : spd === 18 ? 'Sonic' : 'Warp'}
                 </button>
               ))}
             </div>
-
-            <p className="text-[10px] text-slate-400 leading-tight">
-              Move cursor near screen edges to ignite thrusters!
-            </p>
+            <span style={{ fontSize: 9, color: '#94a3b8', lineHeight: 1.2 }}>
+              Move cursor near screen edges to fly canvas!
+            </span>
           </div>
         )}
 
@@ -1105,50 +1339,75 @@ export default function CanvasBoard() {
         <button
           onClick={() => setIsRocketMode((prev) => !prev)}
           title={isRocketMode ? 'Disable Rocket Mode' : 'Enable Rocket Jet Speed Navigation'}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl backdrop-blur-xl shadow-2xl border transition-all transform hover:scale-105 active:scale-95 cursor-pointer ${
-            isRocketMode
-              ? 'bg-gradient-to-r from-amber-500 to-orange-600 border-amber-400/80 text-slate-950 font-bold shadow-amber-500/40'
-              : 'bg-slate-900/85 hover:bg-slate-800 border-slate-700/80 text-slate-300'
-          }`}
+          className="btn-hover-scale interactive"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 18px',
+            borderRadius: 18,
+            border: isRocketMode ? '1px solid #fbbf24' : '1px solid rgba(255,255,255,0.14)',
+            background: isRocketMode
+              ? 'linear-gradient(135deg, #f59e0b, #ea580c)'
+              : 'rgba(15, 23, 42, 0.88)',
+            color: isRocketMode ? '#000' : '#f8fafc',
+            fontWeight: 600,
+            fontSize: 12,
+            boxShadow: isRocketMode
+              ? '0 0 25px rgba(245, 158, 11, 0.5), 0 10px 20px rgba(0,0,0,0.4)'
+              : '0 10px 25px rgba(0,0,0,0.4)',
+            cursor: 'pointer',
+          }}
         >
-          <Rocket
-            className={`w-5 h-5 transition-transform ${
-              isRocketMode ? 'animate-pulse text-slate-950' : 'text-amber-400'
-            }`}
-          />
-          <span className="text-xs font-semibold tracking-wide">
-            {isRocketMode ? 'Rocket Jet Active' : 'Rocket Jet Mode'}
-          </span>
+          <Rocket style={{ width: 18, height: 18, color: isRocketMode ? '#000' : '#f59e0b' }} />
+          <span>{isRocketMode ? 'Rocket Jet Active' : 'Rocket Jet Mode'}</span>
         </button>
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 5. CUSTOM ROCKET CURSOR (When Rocket Jet Mode is active) */}
+      {/* 5. DYNAMIC ROCKET CURSOR (When Rocket Jet Mode is active)   */}
       {/* ----------------------------------------------------------- */}
       {isRocketMode && (
         <div
-          className="fixed pointer-events-none z-50 transition-transform duration-75 ease-out"
           style={{
+            position: 'fixed',
+            pointerEvents: 'none',
+            zIndex: 9999,
             left: `${mouseScreenPos.current.x}px`,
             top: `${mouseScreenPos.current.y}px`,
             transform: `translate(-50%, -50%) rotate(${rocketAngle}deg)`,
+            transition: 'transform 0.06s ease-out',
           }}
         >
-          <div className="relative flex items-center justify-center">
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Rocket
-              className={`w-8 h-8 filter drop-shadow-[0_0_10px_rgba(245,158,11,0.8)] ${
-                isThrusting ? 'text-amber-300 scale-125' : 'text-amber-400'
-              }`}
+              style={{
+                width: 32,
+                height: 32,
+                color: isThrusting ? '#fde047' : '#f59e0b',
+                filter: 'drop-shadow(0 0 8px rgba(245, 158, 11, 0.8))',
+                transform: isThrusting ? 'scale(1.2)' : 'scale(1)',
+              }}
             />
             {isThrusting && (
-              <span className="absolute -bottom-3 w-2.5 h-5 bg-gradient-to-t from-transparent via-amber-400 to-red-500 rounded-full blur-[1px] animate-pulse" />
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: -12,
+                  width: 8,
+                  height: 18,
+                  background: 'linear-gradient(to top, transparent, #fbbf24, #ef4444)',
+                  borderRadius: 9999,
+                  filter: 'blur(1px)',
+                }}
+              />
             )}
           </div>
         </div>
       )}
 
       {/* ----------------------------------------------------------- */}
-      {/* 6. PRIMARY INTERACTIVE HTML5 CANVAS */}
+      {/* 6. PRIMARY HIGH-PERFORMANCE INTERACTIVE HTML5 CANVAS        */}
       {/* ----------------------------------------------------------- */}
       <canvas
         ref={canvasRef}
@@ -1156,17 +1415,21 @@ export default function CanvasBoard() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onWheel={handleWheel}
-        className={`w-full h-full block touch-none ${
-          isRocketMode
-            ? 'cursor-none'
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          touchAction: 'none',
+          cursor: isRocketMode
+            ? 'none'
             : activeTool === 'pen'
-            ? 'cursor-crosshair'
+            ? 'crosshair'
             : activeTool === 'eraser'
-            ? 'cursor-cell'
+            ? 'cell'
             : activeTool === 'shape'
-            ? 'cursor-crosshair'
-            : 'cursor-grab active:cursor-grabbing'
-        }`}
+            ? 'crosshair'
+            : 'grab',
+        }}
       />
     </div>
   );
