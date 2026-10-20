@@ -1,12 +1,12 @@
-import { MetadataRoute } from 'next'
+import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    return [
-        {
-            url: 'https://webtigo-infinity.vercel.app',
-            lastModified: new Date(),
-            changeFrequency: 'always',
-            priority: 1,
-        },
-    ]
+  return [
+    {
+      url: 'https://endlessync.vercel.app',
+      lastModified: new Date(),
+      changeFrequency: 'always',
+      priority: 1,
+    },
+  ];
 }

@@ -13,25 +13,32 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Webtigo Infinity Canvas - Collaborative Infinite Drawing Board",
-  description: "Join Webtigo Infinity Canvas, a real-time multiplayer infinite drawing board. Build, sketch, add voice notes, and drop images collaboratively on an endless digital canvas.",
-  metadataBase: new URL('https://webtigo-infinity.vercel.app'),
+  title: "Endlessync - Real-Time Collaborative Infinite Canvas",
+  description: "Endlessync connects teams and creators in real time across a limitless, high-performance canvas with instantaneous synchronization.",
+  metadataBase: new URL('https://endlessync.vercel.app'),
   alternates: {
     canonical: '/',
   },
-  keywords: ["infinite canvas", "collaborative drawing", "multiplayer whiteboard", "digital canvas", "real-time sketching", "Webtigo", "Webtigo Infinity"],
-  authors: [{ name: "Webtigo" }],
+  keywords: [
+    "Endlessync",
+    "infinite canvas",
+    "collaborative drawing",
+    "multiplayer whiteboard",
+    "real-time synchronization",
+    "WebSocket canvas"
+  ],
+  authors: [{ name: "Endlessync" }],
   openGraph: {
-    title: "Webtigo Infinity Canvas",
-    description: "A limitless multiplayer drawing board for your creativity.",
-    url: 'https://webtigo-infinity.vercel.app',
-    siteName: 'Webtigo Infinity Canvas',
+    title: "Endlessync - Collaborative Infinite Canvas",
+    description: "Connect and create in real-time on an endless digital canvas.",
+    url: 'https://endlessync.vercel.app',
+    siteName: 'Endlessync',
     images: [
       {
-        url: '/og-image.png', // Fallback, we will update this later if an image is provided
+        url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Webtigo Infinity Canvas Preview',
+        alt: 'Endlessync Preview',
       },
     ],
     locale: 'en_US',
@@ -39,8 +46,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "Webtigo Infinity Canvas",
-    description: "Explore the infinite collaborative whiteboard. Draw, chat, and create globally.",
+    title: "Endlessync - Collaborative Infinite Canvas",
+    description: "Real-time limitless collaborative whiteboard.",
   },
   robots: {
     index: true,
@@ -52,9 +59,6 @@ export const metadata: Metadata = {
       'max-image-preview': 'large',
       'max-snippet': -1,
     },
-  },
-  verification: {
-    google: '12uCiJpKQjiUNhJ1NcfriED4-pmNfedVJroRTKthng8',
   },
 };
 

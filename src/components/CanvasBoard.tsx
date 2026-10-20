@@ -1,1366 +1,1173 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Stage, Layer, Line, Image as KonvaImage, Circle, Text as KonvaText, Rect, Ellipse, Transformer } from 'react-konva';
-import { v4 as uuidv4 } from 'uuid';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { socket } from '@/lib/socket';
-import { Hand, Pencil, Type, Mic, Square, Image as ImageIcon, MousePointer2, Shapes, Circle as CircleIcon, Wrench, X } from 'lucide-react';
-import useImage from 'use-image';
+import {
+  Pen,
+  Eraser,
+  Square,
+  Circle,
+  Minus,
+  MoveRight,
+  Star,
+  PaintBucket,
+  Palette,
+  Sliders,
+  Rocket,
+  Compass,
+  Zap,
+  RotateCcw,
+  Trash2,
+  MapPin,
+  ChevronUp,
+  X,
+  Wifi,
+  WifiOff,
+  Flame,
+} from 'lucide-react';
 
-// Types
-type Tool = 'pan' | 'pen' | 'text' | 'select' | 'voice' | 'image' | 'shape';
+// -------------------------------------------------------------
+// Data Types
+// -------------------------------------------------------------
+type ActiveTool = 'pen' | 'eraser' | 'shape' | 'fill' | 'pan';
+type ShapeType = 'rect' | 'circle' | 'line' | 'arrow' | 'star';
 
-type BaseElement = {
-    id: string;
-    type: string;
-    x: number;
-    y: number;
-};
+interface Point {
+  x: number;
+  y: number;
+}
 
-type BrushElement = BaseElement & {
-    type: 'brush';
-    points: number[];
-    color: string;
-    strokeWidth: number;
-    dash?: number[];
-    brushStyle?: 'solid' | 'dashed' | 'highlighter';
-};
+interface CanvasElement {
+  id: string;
+  type: 'stroke' | 'shape' | 'fill';
+  tool?: string;
+  points?: Point[];
+  shapeType?: ShapeType;
+  startX?: number;
+  startY?: number;
+  endX?: number;
+  endY?: number;
+  color: string;
+  fillColor?: string;
+  strokeWidth: number;
+  isFilled?: boolean;
+}
 
-type TextElement = BaseElement & {
-    type: 'text';
-    text: string;
-    fontSize: number;
-    color: string;
-};
+// Preset color palette
+const PRESET_COLORS = [
+  '#ffffff', // Pure White
+  '#38bdf8', // Electric Cyan
+  '#818cf8', // Cosmic Indigo
+  '#a855f7', // Neon Purple
+  '#ec4899', // Hyper Pink
+  '#ef4444', // Solar Red
+  '#f59e0b', // Amber Flame
+  '#10b981', // Matrix Emerald
+  '#06b6d4', // Deep Teal
+  '#64748b', // Slate
+];
 
-type ImageElement = BaseElement & {
-    type: 'image';
-    src: string;
-    width: number;
-    height: number;
-    scaleX?: number;
-    scaleY?: number;
-    rotation?: number;
-};
-
-type AudioElement = BaseElement & {
-    type: 'audio';
-    src: string;
-};
-
-type ShapeElement = BaseElement & {
-    type: 'shape';
-    shapeType: 'rectangle' | 'ellipse';
-    width: number;
-    height: number;
-    fillColor: string;
-    strokeColor: string;
-    strokeWidth: number;
-    scaleX?: number;
-    scaleY?: number;
-    rotation?: number;
-};
-
-type CanvasElement = BrushElement | TextElement | ImageElement | AudioElement | ShapeElement;
-
-// Persistent Global Cache to prevent images from ever disappearing on re-renders/zooms
-const imageCache: Record<string, HTMLImageElement> = {};
-
-// Custom hook to load an image for Konva
-const URLImage = ({ element, tool, setSelectedId, handleDragEnd }: {
-    element: ImageElement;
-    tool: string;
-    setSelectedId: (id: string | null) => void;
-    handleDragEnd: (e: any, id: string) => void;
-}) => {
-    const [image, setImage] = useState<HTMLImageElement | null>(imageCache[element.src] || null);
-
-    useEffect(() => {
-        if (imageCache[element.src]) {
-            setImage(imageCache[element.src]);
-            return;
-        }
-
-        const img = new window.Image();
-        img.src = element.src;
-        img.onload = () => {
-            imageCache[element.src] = img;
-            setImage(img);
-        };
-    }, [element.src]);
-
-    return (
-        <KonvaImage
-            id={element.id}
-            image={image || undefined}
-            x={element.x}
-            y={element.y}
-            width={element.width}
-            height={element.height}
-            scaleX={element.scaleX || 1}
-            scaleY={element.scaleY || 1}
-            rotation={element.rotation || 0}
-            draggable={tool === 'select'}
-            onDragEnd={(e) => handleDragEnd(e, element.id)}
-            onClick={() => { if (tool === 'select') setSelectedId(element.id); }}
-            onTap={() => { if (tool === 'select') setSelectedId(element.id); }}
-        />
-    );
-};
-
-// Transformer component bindings
-const TransformerComponent = ({ selectedId, onTransformEnd }: { selectedId: string, onTransformEnd: (id: string, newProps: any) => void }) => {
-    const trRef = useRef<any>(null);
-    useEffect(() => {
-        if (selectedId && trRef.current) {
-            const stage = trRef.current.getStage();
-            const selectedNode = stage.findOne('#' + selectedId);
-            if (selectedNode) {
-                trRef.current.nodes([selectedNode]);
-                trRef.current.getLayer().batchDraw();
-            }
-        }
-    }, [selectedId]);
-    return <Transformer ref={trRef} onTransformEnd={(e) => onTransformEnd(selectedId, e.target)} />;
-};
-
-// Global state for background theme
-let INITIAL_BG = '#e5e5f7';
-
-// Returns true if any part of the bounding box overlaps the protected circle
-const isProtectedBoundingBox = (x: number, y: number, width: number, height: number) => {
-    const minX = Math.min(x, x + width);
-    const maxX = Math.max(x, x + width);
-    const minY = Math.min(y, y + height);
-    const maxY = Math.max(y, y + height);
-
-    const closestX = Math.max(minX, Math.min(0, maxX));
-    const closestY = Math.max(minY, Math.min(0, maxY));
-
-    const distanceX = 0 - closestX;
-    const distanceY = 0 - closestY;
-
-    return (distanceX * distanceX + distanceY * distanceY) <= 90000; // 300px radius to provide ample padding
-};
-
-// Returns adjusted dimensions capped at maxWidth
-const constrainDimensions = (width: number, height: number, maxWidth: number) => {
-    if (width <= maxWidth && height <= maxWidth) return { width, height };
-    const ratio = width / height;
-    if (width > height) {
-        return { width: maxWidth, height: maxWidth / ratio };
-    } else {
-        return { width: maxWidth * ratio, height: maxWidth };
-    }
-};
+const PRESET_SIZES = [
+  { label: 'Fine', value: 2 },
+  { label: 'Medium', value: 6 },
+  { label: 'Thick', value: 14 },
+  { label: 'Marker', value: 28 },
+];
 
 export default function CanvasBoard() {
-    const [elements, setElements] = useState<CanvasElement[]>([]);
-    const [tool, setTool] = useState<Tool>('pan');
-    const [activeTextInput, setActiveTextInput] = useState<{ x: number, y: number, value: string, id?: string } | null>(null);
-    const contentEditableRef = useRef<HTMLDivElement>(null);
-    const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-    const [scale, setScale] = useState(1);
-    const [pointerPos, setPointerPos] = useState({ x: 0, y: 0 });
-    const [isNavigating, setIsNavigating] = useState(false);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-    // Shape State
-    const [shapeType, setShapeType] = useState<'rectangle' | 'ellipse'>('rectangle');
-    const currentShapeParams = useRef<{ id: string, startX: number, startY: number } | null>(null);
+  // -----------------------------------------------------------
+  // Canvas Viewport State (Pan & Zoom)
+  // -----------------------------------------------------------
+  const [panOffset, setPanOffset] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState<number>(1);
+  const panOffsetRef = useRef<Point>({ x: 0, y: 0 });
+  const zoomRef = useRef<number>(1);
 
-    // Global Theme State
-    const [canvasBg, setCanvasBg] = useState(INITIAL_BG);
+  // Keep refs synchronized for animation loops
+  useEffect(() => {
+    panOffsetRef.current = panOffset;
+  }, [panOffset]);
 
-    // Easter Egg State
-    const [hasClickedYellow, setHasClickedYellow] = useState(false);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
-    // Voice State
-    const [isRecording, setIsRecording] = useState(false);
-    const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
+  // -----------------------------------------------------------
+  // Drawing & Elements State
+  // -----------------------------------------------------------
+  const [elements, setElements] = useState<CanvasElement[]>([]);
+  const elementsRef = useRef<CanvasElement[]>([]);
+  elementsRef.current = elements;
 
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
+  const [activeTool, setActiveTool] = useState<ActiveTool>('pan');
+  const [currentColor, setCurrentColor] = useState<string>('#38bdf8');
+  const [strokeWidth, setStrokeWidth] = useState<number>(4);
+  const [selectedShape, setSelectedShape] = useState<ShapeType>('rect');
+  const [isFillActive, setIsFillActive] = useState<boolean>(false);
+  const [fillColor, setFillColor] = useState<string>('rgba(56, 189, 248, 0.25)');
 
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) audioChunksRef.current.push(e.data);
-            };
+  // Interaction tracking
+  const isInteracting = useRef(false);
+  const startPoint = useRef<Point>({ x: 0, y: 0 });
+  const currentStroke = useRef<Point[]>([]);
 
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(audioBlob);
-                reader.onloadend = () => {
-                    setRecordedAudioUrl(reader.result as string);
-                };
-                stream.getTracks().forEach(track => track.stop());
-            };
+  // -----------------------------------------------------------
+  // Socket & Sync State
+  // -----------------------------------------------------------
+  const [isConnected, setIsConnected] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState(1);
+  const [pingMs, setPingMs] = useState<number | null>(null);
 
-            mediaRecorder.start();
-            setIsRecording(true);
-            setRecordedAudioUrl(null);
-        } catch (err) {
-            console.error("Error accessing mic:", err);
-            alert("Could not access microphone. Please allow permissions.");
+  // -----------------------------------------------------------
+  // Coordinate Teleport HUD State (Top-Left)
+  // -----------------------------------------------------------
+  const [cursorWorldPos, setCursorWorldPos] = useState<Point>({ x: 0, y: 0 });
+  const [isTeleportOpen, setIsTeleportOpen] = useState(false);
+  const [teleportX, setTeleportX] = useState<string>('0');
+  const [teleportY, setTeleportY] = useState<string>('0');
+
+  // -----------------------------------------------------------
+  // Bottom Radial Hub State (Middle-Bottom)
+  // -----------------------------------------------------------
+  const [isRadialOpen, setIsRadialOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<'size' | 'color' | 'shape' | 'fill' | 'eraser' | null>(null);
+
+  // -----------------------------------------------------------
+  // Rocket / Jet Speed Mode State (Bottom-Right)
+  // -----------------------------------------------------------
+  const [isRocketMode, setIsRocketMode] = useState(false);
+  const [rocketSpeed, setRocketSpeed] = useState<number>(18); // Pixels per frame multiplier
+  const [rocketAngle, setRocketAngle] = useState<number>(0);
+  const [isThrusting, setIsThrusting] = useState(false);
+  const mouseScreenPos = useRef<Point>({ x: 0, y: 0 });
+  const animationFrameId = useRef<number | null>(null);
+
+  // -----------------------------------------------------------
+  // Coordinate Transformations
+  // -----------------------------------------------------------
+  const screenToWorld = useCallback((screenX: number, screenY: number): Point => {
+    return {
+      x: (screenX - panOffsetRef.current.x) / zoomRef.current,
+      y: (screenY - panOffsetRef.current.y) / zoomRef.current,
+    };
+  }, []);
+
+  const worldToScreen = useCallback((worldX: number, worldY: number): Point => {
+    return {
+      x: worldX * zoomRef.current + panOffsetRef.current.x,
+      y: worldY * zoomRef.current + panOffsetRef.current.y,
+    };
+  }, []);
+
+  // -----------------------------------------------------------
+  // Teleportation Functionality
+  // -----------------------------------------------------------
+  const teleportTo = useCallback((targetX: number, targetY: number) => {
+    if (typeof window === 'undefined') return;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+
+    const newPanX = centerX - targetX * zoomRef.current;
+    const newPanY = centerY - targetY * zoomRef.current;
+
+    setPanOffset({ x: newPanX, y: newPanY });
+    setIsTeleportOpen(false);
+  }, []);
+
+  // -----------------------------------------------------------
+  // Canvas Rendering Loop
+  // -----------------------------------------------------------
+  const renderCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Reset transform & clear
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Canvas background
+    ctx.fillStyle = '#0a0c10';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Infinite Dot Grid Matrix
+    const gridSize = 40 * zoom;
+    const offsetX = panOffset.x % gridSize;
+    const offsetY = panOffset.y % gridSize;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    for (let x = offsetX; x < canvas.width; x += gridSize) {
+      for (let y = offsetY; y < canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2 * Math.min(zoom, 1.8), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Origin (0,0) subtle coordinate crosshairs
+    const origin = worldToScreen(0, 0);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(origin.x, 0);
+    ctx.lineTo(origin.x, canvas.height);
+    ctx.moveTo(0, origin.y);
+    ctx.lineTo(canvas.width, origin.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Apply viewport transformation for drawing world elements
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoom, zoom);
+
+    // Draw all persisted elements
+    elementsRef.current.forEach((el) => {
+      ctx.save();
+      ctx.strokeStyle = el.color;
+      ctx.fillStyle = el.fillColor || el.color;
+      ctx.lineWidth = el.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (el.type === 'stroke' && el.points && el.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(el.points[0].x, el.points[0].y);
+        for (let i = 1; i < el.points.length; i++) {
+          ctx.lineTo(el.points[i].x, el.points[i].y);
         }
+        ctx.stroke();
+      } else if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined && el.endX !== undefined && el.endY !== undefined) {
+        const sx = el.startX;
+        const sy = el.startY;
+        const ex = el.endX;
+        const ey = el.endY;
+
+        ctx.beginPath();
+        if (el.shapeType === 'rect') {
+          const x = Math.min(sx, ex);
+          const y = Math.min(sy, ey);
+          const w = Math.abs(ex - sx);
+          const h = Math.abs(ey - sy);
+          if (el.isFilled) ctx.fillRect(x, y, w, h);
+          ctx.strokeRect(x, y, w, h);
+        } else if (el.shapeType === 'circle') {
+          const rx = Math.abs(ex - sx) / 2;
+          const ry = Math.abs(ey - sy) / 2;
+          const cx = Math.min(sx, ex) + rx;
+          const cy = Math.min(sy, ey) + ry;
+          ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+          if (el.isFilled) ctx.fill();
+          ctx.stroke();
+        } else if (el.shapeType === 'line') {
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+        } else if (el.shapeType === 'arrow') {
+          // Draw line
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          // Draw arrowhead
+          const angle = Math.atan2(ey - sy, ex - sx);
+          const headlen = 16 / zoom;
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - headlen * Math.cos(angle - Math.PI / 6), ey - headlen * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(ex - headlen * Math.cos(angle + Math.PI / 6), ey - headlen * Math.sin(angle + Math.PI / 6));
+          ctx.closePath();
+          ctx.fill();
+        } else if (el.shapeType === 'star') {
+          const cx = (sx + ex) / 2;
+          const cy = (sy + ey) / 2;
+          const r = Math.hypot(ex - sx, ey - sy) / 2;
+          const spikes = 5;
+          let rot = (Math.PI / 2) * 3;
+          let step = Math.PI / spikes;
+
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - r);
+          for (let i = 0; i < spikes; i++) {
+            let x = cx + Math.cos(rot) * r;
+            let y = cy + Math.sin(rot) * r;
+            ctx.lineTo(x, y);
+            rot += step;
+
+            x = cx + Math.cos(rot) * (r / 2);
+            y = cy + Math.sin(rot) * (r / 2);
+            ctx.lineTo(x, y);
+            rot += step;
+          }
+          ctx.lineTo(cx, cy - r);
+          ctx.closePath();
+          if (el.isFilled) ctx.fill();
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    });
+
+    ctx.restore();
+  }, [panOffset, zoom, worldToScreen]);
+
+  // Keep canvas resized to full viewport
+  useEffect(() => {
+    const handleResize = () => {
+      if (!canvasRef.current) return;
+      canvasRef.current.width = window.innerWidth;
+      canvasRef.current.height = window.innerHeight;
+      renderCanvas();
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [renderCanvas]);
+
+  useEffect(() => {
+    renderCanvas();
+  }, [elements, panOffset, zoom, renderCanvas]);
+
+  // -----------------------------------------------------------
+  // Rocket Mode Physics Loop (Edge Proximity Acceleration)
+  // -----------------------------------------------------------
+  useEffect(() => {
+    if (!isRocketMode) {
+      setIsThrusting(false);
+      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+      return;
+    }
+
+    const proximityThreshold = 140; // Pixels from border to engage thrusters
+
+    const rocketTick = () => {
+      const { innerWidth: width, innerHeight: height } = window;
+      const mouseX = mouseScreenPos.current.x;
+      const mouseY = mouseScreenPos.current.y;
+
+      let dx = 0;
+      let dy = 0;
+
+      // Check Proximity to Edges
+      if (mouseX < proximityThreshold) {
+        const factor = (proximityThreshold - mouseX) / proximityThreshold;
+        dx += factor * rocketSpeed;
+      } else if (mouseX > width - proximityThreshold) {
+        const factor = (mouseX - (width - proximityThreshold)) / proximityThreshold;
+        dx -= factor * rocketSpeed;
+      }
+
+      if (mouseY < proximityThreshold) {
+        const factor = (proximityThreshold - mouseY) / proximityThreshold;
+        dy += factor * rocketSpeed;
+      } else if (mouseY > height - proximityThreshold) {
+        const factor = (mouseY - (height - proximityThreshold)) / proximityThreshold;
+        dy -= factor * rocketSpeed;
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        setIsThrusting(true);
+        // Compute angle for rocket pointing direction (-dx, -dy)
+        const angleDeg = (Math.atan2(-dy, -dx) * 180) / Math.PI + 90;
+        setRocketAngle(angleDeg);
+
+        setPanOffset((prev) => ({
+          x: prev.x + dx,
+          y: prev.y + dy,
+        }));
+      } else {
+        setIsThrusting(false);
+      }
+
+      animationFrameId.current = requestAnimationFrame(rocketTick);
     };
 
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-        }
+    animationFrameId.current = requestAnimationFrame(rocketTick);
+    return () => {
+      if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+    };
+  }, [isRocketMode, rocketSpeed]);
+
+  // -----------------------------------------------------------
+  // Socket.io Real-Time Synchronization
+  // -----------------------------------------------------------
+  useEffect(() => {
+    const onConnect = () => {
+      setIsConnected(true);
+      const start = Date.now();
+      socket.emit('endlessync:ping', () => setPingMs(Date.now() - start));
     };
 
-    // Image Placement State
-    const [stagedImageUrl, setStagedImageUrl] = useState<string | null>(null);
-    const [stagedImageDimensions, setStagedImageDimensions] = useState<{ width: number, height: number } | null>(null);
+    const onDisconnect = () => setIsConnected(false);
 
-    const handleImageUploadSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const src = event.target?.result as string;
-                const img = new window.Image();
-                img.src = src;
-                img.onload = () => {
-                    setStagedImageUrl(src);
-                    setStagedImageDimensions({ width: img.width, height: img.height });
-                };
-            };
-            reader.readAsDataURL(file);
-        }
+    const onInit = (data: { elements?: CanvasElement[]; onlineUsers?: number }) => {
+      setIsConnected(true);
+      if (data.elements) setElements(data.elements);
+      if (data.onlineUsers) setOnlineUsers(data.onlineUsers);
     };
 
-    // Pen State
-    const [brushColor, setBrushColor] = useState('#000000');
-    const [brushSize, setBrushSize] = useState(5);
-    const [brushStyle, setBrushStyle] = useState<'solid' | 'dashed'>('solid');
-
-    // Drawing State
-    const [isDrawing, setIsDrawing] = useState(false);
-    const currentLineParams = useRef<{ id: string, points: number[] } | null>(null);
-
-    // Resize handling
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-
-    useEffect(() => {
-        setDimensions({ width: window.innerWidth, height: window.innerHeight });
-        const handleResize = () => setDimensions({ width: window.innerWidth, height: window.innerHeight });
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    // Socket setup
-    useEffect(() => {
-        if (activeTextInput && contentEditableRef.current) {
-            // Focus the editable div and place cursor at end
-            const el = contentEditableRef.current;
-            el.focus();
-            if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
-                const range = document.createRange();
-                range.selectNodeContents(el);
-                range.collapse(false);
-                const sel = window.getSelection();
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-            }
+    const onElementAdded = (element: CanvasElement) => {
+      setElements((prev) => {
+        const idx = prev.findIndex((el) => el.id === element.id);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = element;
+          return next;
         }
-    }, [activeTextInput]);
-
-    useEffect(() => {
-        socket.on('init_elements', (serverElements: CanvasElement[]) => {
-            setElements(serverElements);
-        });
-
-        socket.on('init_bg', (bgURL: string) => {
-            setCanvasBg(bgURL || INITIAL_BG);
-        });
-
-        socket.on('element_added', (element: CanvasElement) => {
-            setElements((prev) => {
-                const map = new Map(prev.map(p => [p.id, p]));
-                map.set(element.id, element);
-                return Array.from(map.values());
-            });
-        });
-
-        socket.on('bg_changed', (newBg: string) => {
-            setCanvasBg(newBg);
-        });
-
-        socket.on('canvas_cleared', () => {
-            setElements([]);
-        });
-
-        return () => {
-            socket.off('init_elements');
-            socket.off('init_bg');
-            socket.off('element_added');
-            socket.off('bg_changed');
-            socket.off('canvas_cleared');
-        };
-    }, []);
-
-    // Handle pasting images/text
-    useEffect(() => {
-        const handlePaste = (e: ClipboardEvent) => {
-            // Ignore if we are currently typing in an active text box
-            if (activeTextInput) return;
-
-            const items = e.clipboardData?.items;
-            if (!items) return;
-
-            // Find image
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf('image') !== -1) {
-                    const blob = items[i].getAsFile();
-                    if (blob) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const src = event.target?.result as string;
-
-                            // Load image to get natural dimensions
-                            const img = new window.Image();
-                            img.src = src;
-                            img.onload = () => {
-                                // Determine center of screen in logical coordinates
-                                const centerLogicalX = (-stagePos.x + dimensions.width / 2) / scale;
-                                const centerLogicalY = (-stagePos.y + dimensions.height / 2) / scale;
-
-                                const { width: cWidth, height: cHeight } = constrainDimensions(img.width, img.height, 800);
-
-                                if (isProtectedBoundingBox(centerLogicalX - cWidth / 2, centerLogicalY - cHeight / 2, cWidth, cHeight)) {
-                                    alert("Cannot paste images inside the reserved area. Please paste further away!");
-                                    return;
-                                }
-
-                                const newElement: ImageElement = {
-                                    id: uuidv4(),
-                                    type: 'image',
-                                    src,
-                                    x: centerLogicalX - cWidth / 2,
-                                    y: centerLogicalY - cHeight / 2,
-                                    width: cWidth,
-                                    height: cHeight,
-                                };
-
-                                setElements((prev) => [...prev, newElement]);
-                                socket.emit('add_element', newElement);
-                            };
-                        };
-                        reader.readAsDataURL(blob);
-                    }
-                    return; // Stop after first image found
-                }
-            }
-
-            // If no image, check for text
-            const pastedText = e.clipboardData?.getData('text');
-            if (pastedText) {
-                const centerLogicalX = (-stagePos.x + dimensions.width / 2) / scale;
-                const centerLogicalY = (-stagePos.y + dimensions.height / 2) / scale;
-
-                const newElement: TextElement = {
-                    id: uuidv4(),
-                    type: 'text',
-                    text: pastedText,
-                    x: centerLogicalX,
-                    y: centerLogicalY,
-                    fontSize: 24,
-                    color: 'black',
-                };
-
-                setElements((prev) => [...prev, newElement]);
-                socket.emit('add_element', newElement);
-            }
-        };
-
-        window.addEventListener('paste', handlePaste);
-        return () => window.removeEventListener('paste', handlePaste);
-    }, [stagePos, scale, dimensions, activeTextInput]);
-
-    // Zoom handling (Infinite Canvas feature)
-    const handleWheel = (e: any) => {
-        e.evt.preventDefault();
-        const scaleBy = 1.1;
-        const stage = e.target.getStage();
-        const oldScale = stage.scaleX();
-        const mousePointTo = {
-            x: stage.getPointerPosition().x / oldScale - stage.x() / oldScale,
-            y: stage.getPointerPosition().y / oldScale - stage.y() / oldScale,
-        };
-
-        const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-        setScale(newScale);
-
-        setStagePos({
-            x: -(mousePointTo.x - stage.getPointerPosition().x / newScale) * newScale,
-            y: -(mousePointTo.y - stage.getPointerPosition().y / newScale) * newScale,
-        });
+        return [...prev, element];
+      });
     };
 
-    // Keyboard Panning
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore if user is currently typing text or coordinates
-            if (activeTextInput || isNavigating) return;
-            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-
-            const speed = 50; // "a little fast speed"
-
-            switch (e.key) {
-                case 'w':
-                case 'W':
-                case 'ArrowUp':
-                    setStagePos(p => ({ ...p, y: p.y + speed }));
-                    break;
-                case 's':
-                case 'S':
-                case 'ArrowDown':
-                    setStagePos(p => ({ ...p, y: p.y - speed }));
-                    break;
-                case 'a':
-                case 'A':
-                case 'ArrowLeft':
-                    setStagePos(p => ({ ...p, x: p.x + speed }));
-                    break;
-                case 'd':
-                case 'D':
-                case 'ArrowRight':
-                    setStagePos(p => ({ ...p, x: p.x - speed }));
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeTextInput, isNavigating]);
-
-    const updatePointerPos = (e: any) => {
-        if (isNavigating) return;
-        const stage = e.target.getStage();
-        const pos = stage.getPointerPosition();
-        if (!pos) return;
-        const x = Math.round((pos.x - stagePos.x) / scale);
-        const y = Math.round((pos.y - stagePos.y) / scale);
-        setPointerPos({ x, y });
+    const onElementErased = (elementId: string) => {
+      setElements((prev) => prev.filter((el) => el.id !== elementId));
     };
 
-    const commitTextInput = useCallback(() => {
-        if (!activeTextInput) return;
-        const finalVal = contentEditableRef.current?.innerText || '';
-
-        if (finalVal.trim() !== '') {
-            const newElement: TextElement = {
-                id: activeTextInput.id || uuidv4(),
-                type: 'text',
-                text: finalVal,
-                x: activeTextInput.x,
-                y: activeTextInput.y,
-                fontSize: 24,
-                color: 'black',
-            };
-
-            setElements((prev) => {
-                const map = new Map(prev.map(p => [p.id, p]));
-                map.set(newElement.id, newElement);
-                return Array.from(map.values());
-            });
-            socket.emit('add_element', newElement);
-        }
-        setActiveTextInput(null);
-    }, [activeTextInput]);
-
-    const handlePointerDown = (e: any) => {
-        if (tool === 'pan') {
-            const stage = e.target.getStage();
-            if (e.target === stage) {
-                // If pan, clear selection
-                setSelectedId(null);
-            }
-            return;
-        }
-
-        if (tool === 'select') {
-            const stage = e.target.getStage();
-            // If we click on the empty stage space, clear selection
-            if (e.target === stage) {
-                setSelectedId(null);
-            }
-            return;
-        }
-
-        if (tool === 'text') {
-            setSelectedId(null);
-            // we spawn on onClick instead to avoid pointerdown focus issues
-            return;
-        }
-
-        if (tool === 'pen') {
-            setSelectedId(null);
-            setIsDrawing(true);
-            const stage = e.target.getStage();
-            const pos = stage.getPointerPosition();
-            if (!pos) return;
-            const x = (pos.x - stagePos.x) / scale;
-            const y = (pos.y - stagePos.y) / scale;
-
-            const newId = uuidv4();
-            currentLineParams.current = { id: newId, points: [x, y] };
-
-            const newElement: BrushElement = {
-                id: newId,
-                type: 'brush',
-                points: [x, y],
-                color: brushColor,
-                strokeWidth: brushSize,
-                brushStyle: brushStyle,
-                dash: brushStyle === 'dashed' ? [brushSize * 2, brushSize * 2] : undefined,
-                x: 0, y: 0 // offset handled in points
-            };
-
-            setElements((prev) => [...prev, newElement]);
-        }
-
-        if (tool === 'shape') {
-            setSelectedId(null);
-            setIsDrawing(true);
-            const stage = e.target.getStage();
-            const pos = stage.getPointerPosition();
-            if (!pos) return;
-            const x = (pos.x - stagePos.x) / scale;
-            const y = (pos.y - stagePos.y) / scale;
-
-            const newId = uuidv4();
-            currentShapeParams.current = { id: newId, startX: x, startY: y };
-
-            const newElement: ShapeElement = {
-                id: newId,
-                type: 'shape',
-                shapeType: shapeType,
-                x: x,
-                y: y,
-                width: 0,
-                height: 0,
-                fillColor: 'transparent',
-                strokeColor: brushColor,
-                strokeWidth: brushSize,
-                scaleX: 1,
-                scaleY: 1,
-                rotation: 0
-            };
-
-            setElements((prev) => [...prev, newElement]);
-        }
+    const onCanvasCleared = () => {
+      setElements([]);
     };
 
-    const handleStageClick = (e: any) => {
-        // If clicking on stage when text is active, commit it
-        if (activeTextInput) {
-            commitTextInput();
-            return;
-        }
-
-        if (tool === 'text') {
-            const stage = e.target.getStage();
-            const pos = stage.getPointerPosition();
-            if (!pos) return;
-            const x = (pos.x - stagePos.x) / scale;
-            const y = (pos.y - stagePos.y) / scale;
-
-            setActiveTextInput({ x, y, value: '', id: uuidv4() });
-        }
-
-        if (tool === 'voice' && recordedAudioUrl) {
-            const stage = e.target.getStage();
-            const pos = stage.getPointerPosition();
-            if (!pos) return;
-            const x = (pos.x - stagePos.x) / scale;
-            const y = (pos.y - stagePos.y) / scale;
-
-            if (isProtectedBoundingBox(x - 100, y - 25, 200, 50)) {
-                alert("Cannot place voice notes inside the reserved area!");
-                return;
-            }
-
-            const newElement: AudioElement = {
-                id: uuidv4(),
-                type: 'audio',
-                src: recordedAudioUrl,
-                x, y
-            };
-            setElements((prev) => {
-                const map = new Map(prev.map(p => [p.id, p]));
-                map.set(newElement.id, newElement);
-                return Array.from(map.values());
-            });
-            socket.emit('add_element', newElement);
-
-            setRecordedAudioUrl(null);
-            setTool('pan');
-        }
-
-        if (tool === 'image' && stagedImageUrl && stagedImageDimensions) {
-            const stage = e.target.getStage();
-            const pos = stage.getPointerPosition();
-            if (!pos) return;
-            const x = (pos.x - stagePos.x) / scale;
-            const y = (pos.y - stagePos.y) / scale;
-
-            const { width: cWidth, height: cHeight } = constrainDimensions(stagedImageDimensions.width, stagedImageDimensions.height, 800);
-
-            if (isProtectedBoundingBox(x - cWidth / 2, y - cHeight / 2, cWidth, cHeight)) {
-                alert("Cannot place images inside the reserved area!");
-                return;
-            }
-
-            const newElement: ImageElement = {
-                id: uuidv4(),
-                type: 'image',
-                src: stagedImageUrl,
-                x: x - cWidth / 2, // Center the image on cursor
-                y: y - cHeight / 2,
-                width: cWidth,
-                height: cHeight
-            };
-            setElements((prev) => {
-                const map = new Map(prev.map(p => [p.id, p]));
-                map.set(newElement.id, newElement);
-                return Array.from(map.values());
-            });
-            socket.emit('add_element', newElement);
-
-            setStagedImageUrl(null);
-            setStagedImageDimensions(null);
-            setTool('pan');
-        }
+    const onUsersCount = (data: { onlineUsers: number }) => {
+      if (data && typeof data.onlineUsers === 'number') {
+        setOnlineUsers(data.onlineUsers);
+      }
     };
 
-    const handlePointerMove = (e: any) => {
-        updatePointerPos(e);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('endlessync:init', onInit);
+    socket.on('element:added', onElementAdded);
+    socket.on('element:erased', onElementErased);
+    socket.on('canvas:cleared', onCanvasCleared);
+    socket.on('endlessync:users_count', onUsersCount);
 
-        if (!isDrawing) return;
+    if (socket.connected) setIsConnected(true);
 
-        const stage = e.target.getStage();
-        const pos = stage.getPointerPosition();
-        if (!pos) return;
-        const x = (pos.x - stagePos.x) / scale;
-        const y = (pos.y - stagePos.y) / scale;
-
-        if (tool === 'pen' && currentLineParams.current) {
-            currentLineParams.current.points.push(x, y);
-
-            setElements((prev) => {
-                const clone = [...prev];
-                const lastLine = clone[clone.length - 1];
-                if (lastLine && lastLine.type === 'brush' && lastLine.id === currentLineParams.current?.id) {
-                    lastLine.points = [...currentLineParams.current.points];
-                }
-                return clone;
-            });
-        }
-
-        if (tool === 'shape' && currentShapeParams.current) {
-            const startX = currentShapeParams.current.startX;
-            const startY = currentShapeParams.current.startY;
-            let currentX = Math.min(x, startX);
-            let currentY = Math.min(y, startY);
-            let currentWidth = Math.abs(x - startX);
-            let currentHeight = Math.abs(y - startY);
-
-            if (shapeType === 'ellipse') {
-                currentX = startX + (x - startX) / 2 - currentWidth / 2;
-                currentY = startY + (y - startY) / 2 - currentHeight / 2;
-            }
-
-            setElements((prev) => {
-                const clone = [...prev];
-                const lastShape = clone[clone.length - 1];
-                if (lastShape && lastShape.type === 'shape' && lastShape.id === currentShapeParams.current?.id) {
-                    if (shapeType === 'rectangle') {
-                        lastShape.x = currentX;
-                        lastShape.y = currentY;
-                        lastShape.width = currentWidth;
-                        lastShape.height = currentHeight;
-                    } else { // ellipse
-                        lastShape.x = startX + (x - startX) / 2;
-                        lastShape.y = startY + (y - startY) / 2;
-                        lastShape.width = currentWidth; // total width of bounds
-                        lastShape.height = currentHeight; // total height of bounds
-                    }
-                }
-                return clone;
-            });
-        }
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('endlessync:init', onInit);
+      socket.off('element:added', onElementAdded);
+      socket.off('element:erased', onElementErased);
+      socket.off('canvas:cleared', onCanvasCleared);
+      socket.off('endlessync:users_count', onUsersCount);
     };
+  }, []);
 
-    const handlePointerUp = () => {
-        if (tool === 'pen' && isDrawing && currentLineParams.current) {
-            setIsDrawing(false);
-            const finishedLine = elements.find(e => e.id === currentLineParams.current?.id);
-            if (finishedLine) {
-                socket.emit('add_element', finishedLine);
-            }
-            currentLineParams.current = null;
+  // -----------------------------------------------------------
+  // Mouse & Pointer Event Handlers
+  // -----------------------------------------------------------
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    isInteracting.current = true;
+    const worldPoint = screenToWorld(e.clientX, e.clientY);
+    startPoint.current = worldPoint;
+
+    if (activeTool === 'pen') {
+      currentStroke.current = [worldPoint];
+    } else if (activeTool === 'eraser') {
+      eraseAtPoint(worldPoint);
+    } else if (activeTool === 'fill') {
+      // Toggle fill bucket on clicked shape or background
+      const clicked = findElementNearPoint(worldPoint);
+      if (clicked && clicked.type === 'shape') {
+        const updated: CanvasElement = { ...clicked, isFilled: true, fillColor };
+        setElements((prev) => prev.map((el) => (el.id === clicked.id ? updated : el)));
+        socket.emit('element:add', updated);
+      }
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    mouseScreenPos.current = { x: e.clientX, y: e.clientY };
+    const worldPoint = screenToWorld(e.clientX, e.clientY);
+    setCursorWorldPos(worldPoint);
+
+    if (!isInteracting.current) return;
+
+    if (activeTool === 'pan' || (!activeTool && !isRocketMode)) {
+      setPanOffset((prev) => ({
+        x: prev.x + e.movementX,
+        y: prev.y + e.movementY,
+      }));
+    } else if (activeTool === 'pen') {
+      currentStroke.current.push(worldPoint);
+
+      // Render in-progress stroke directly for ultra-low latency
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.save();
+          ctx.translate(panOffset.x, panOffset.y);
+          ctx.scale(zoom, zoom);
+          ctx.strokeStyle = currentColor;
+          ctx.lineWidth = strokeWidth;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          const pts = currentStroke.current;
+          if (pts.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
+            ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+            ctx.stroke();
+          }
+          ctx.restore();
         }
+      }
+    } else if (activeTool === 'eraser') {
+      eraseAtPoint(worldPoint);
+    } else if (activeTool === 'shape') {
+      // Preview shape during drag
+      renderCanvas();
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.save();
+          ctx.translate(panOffset.x, panOffset.y);
+          ctx.scale(zoom, zoom);
+          ctx.strokeStyle = currentColor;
+          ctx.fillStyle = isFillActive ? fillColor : 'transparent';
+          ctx.lineWidth = strokeWidth;
+          ctx.setLineDash([4, 4]);
 
-        if (tool === 'shape' && isDrawing && currentShapeParams.current) {
-            setIsDrawing(false);
-            const finishedShape = elements.find(e => e.id === currentShapeParams.current?.id);
-            if (finishedShape) {
-                socket.emit('add_element', finishedShape);
-            }
-            currentShapeParams.current = null;
+          const sx = startPoint.current.x;
+          const sy = startPoint.current.y;
+          const ex = worldPoint.x;
+          const ey = worldPoint.y;
+
+          if (selectedShape === 'rect') {
+            const x = Math.min(sx, ex);
+            const y = Math.min(sy, ey);
+            const w = Math.abs(ex - sx);
+            const h = Math.abs(ey - sy);
+            if (isFillActive) ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+          } else if (selectedShape === 'circle') {
+            const rx = Math.abs(ex - sx) / 2;
+            const ry = Math.abs(ey - sy) / 2;
+            const cx = Math.min(sx, ex) + rx;
+            const cy = Math.min(sy, ey) + ry;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            if (isFillActive) ctx.fill();
+            ctx.stroke();
+          } else if (selectedShape === 'line' || selectedShape === 'arrow') {
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+          }
+          ctx.restore();
         }
-    };
+      }
+    }
+  };
 
-    const handleTransformEnd = (id: string, node: any) => {
-        setElements((prev) => {
-            const map = new Map(prev.map(p => [p.id, p]));
-            const el = map.get(id);
-            if (el && (el.type === 'shape' || el.type === 'image')) {
-                const shapeEl = el as ShapeElement | ImageElement;
-                const newX = node.x();
-                const newY = node.y();
-                const newScaleX = node.scaleX();
-                const newScaleY = node.scaleY();
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isInteracting.current) return;
+    isInteracting.current = false;
+    const worldPoint = screenToWorld(e.clientX, e.clientY);
 
-                let checkX = newX;
-                let checkY = newY;
-                const checkW = shapeEl.width * newScaleX;
-                const checkH = shapeEl.height * newScaleY;
+    if (activeTool === 'pen' && currentStroke.current.length > 0) {
+      const newStroke: CanvasElement = {
+        id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        type: 'stroke',
+        points: currentStroke.current,
+        color: currentColor,
+        strokeWidth: strokeWidth,
+      };
+      setElements((prev) => [...prev, newStroke]);
+      socket.emit('element:add', newStroke);
+      currentStroke.current = [];
+    } else if (activeTool === 'shape') {
+      const newShape: CanvasElement = {
+        id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        type: 'shape',
+        shapeType: selectedShape,
+        startX: startPoint.current.x,
+        startY: startPoint.current.y,
+        endX: worldPoint.x,
+        endY: worldPoint.y,
+        color: currentColor,
+        fillColor: isFillActive ? fillColor : undefined,
+        strokeWidth: strokeWidth,
+        isFilled: isFillActive,
+      };
+      setElements((prev) => [...prev, newShape]);
+      socket.emit('element:add', newShape);
+      renderCanvas();
+    }
+  };
 
-                if (el.type === 'shape' && (shapeEl as ShapeElement).shapeType === 'ellipse') {
-                    checkX -= Math.abs(checkW) / 2;
-                    checkY -= Math.abs(checkH) / 2;
-                }
+  // Wheel zoom
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+    const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.15), 5);
 
-                if (el.type === 'image' && isProtectedBoundingBox(checkX, checkY, Math.abs(checkW), Math.abs(checkH))) {
-                    alert("Keep the reserved area clear of images!");
-                    node.x(shapeEl.x);
-                    node.y(shapeEl.y);
-                    node.scaleX(shapeEl.scaleX || 1);
-                    node.scaleY(shapeEl.scaleY || 1);
-                    node.rotation(shapeEl.rotation || 0);
-                    return Array.from(map.values());
-                }
+    // Zoom centered on cursor position
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
 
-                shapeEl.x = newX;
-                shapeEl.y = newY;
-                shapeEl.rotation = node.rotation();
-                shapeEl.scaleX = newScaleX;
-                shapeEl.scaleY = newScaleY;
-                map.set(id, shapeEl);
-                socket.emit('add_element', shapeEl);
-            }
-            return Array.from(map.values());
-        });
-    };
+    const newPanX = mouseX - (mouseX - panOffset.x) * (newZoom / zoom);
+    const newPanY = mouseY - (mouseY - panOffset.y) * (newZoom / zoom);
 
-    const handleDragEnd = (e: any, id: string) => {
-        const node = e.target;
-        setElements((prev) => {
-            const map = new Map(prev.map(p => [p.id, p]));
-            const el = map.get(id);
-            if (el && (el.type === 'shape' || el.type === 'image')) {
-                const shapeEl = el as ShapeElement | ImageElement;
-                const newX = node.x();
-                const newY = node.y();
+    setZoom(newZoom);
+    setPanOffset({ x: newPanX, y: newPanY });
+  };
 
-                let checkX = newX;
-                let checkY = newY;
-                const checkW = shapeEl.width * (shapeEl.scaleX || 1);
-                const checkH = shapeEl.height * (shapeEl.scaleY || 1);
+  // Erase detection
+  const eraseAtPoint = (point: Point) => {
+    const radius = 20 / zoom;
+    const target = elementsRef.current.find((el) => {
+      if (el.type === 'stroke' && el.points) {
+        return el.points.some((p) => Math.hypot(p.x - point.x, p.y - point.y) < radius);
+      } else if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
+        const midX = (el.startX + (el.endX || el.startX)) / 2;
+        const midY = (el.startY + (el.endY || el.startY)) / 2;
+        return Math.hypot(midX - point.x, midY - point.y) < radius * 2;
+      }
+      return false;
+    });
 
-                if (el.type === 'shape' && (shapeEl as ShapeElement).shapeType === 'ellipse') {
-                    checkX -= Math.abs(checkW) / 2;
-                    checkY -= Math.abs(checkH) / 2;
-                }
+    if (target) {
+      setElements((prev) => prev.filter((el) => el.id !== target.id));
+      socket.emit('element:erase', target.id);
+    }
+  };
 
-                if (el.type === 'image' && isProtectedBoundingBox(checkX, checkY, Math.abs(checkW), Math.abs(checkH))) {
-                    alert("Keep the reserved area clear of images!");
-                    node.x(shapeEl.x);
-                    node.y(shapeEl.y);
-                    return Array.from(map.values());
-                }
-
-                shapeEl.x = newX;
-                shapeEl.y = newY;
-                map.set(id, shapeEl);
-                socket.emit('add_element', shapeEl);
-            }
-            return Array.from(map.values());
-        });
-    };
-
-    if (dimensions.width === 0) return <div className="h-screen w-screen flex items-center justify-center bg-zinc-900 text-white font-mono object-cover">Loading Canvas...</div>;
-
+  const findElementNearPoint = (point: Point): CanvasElement | null => {
     return (
-        <div className="relative w-screen h-screen overflow-hidden transition-colors duration-1000" style={{
-            backgroundColor: canvasBg,
-            backgroundImage: `radial-gradient(${canvasBg === INITIAL_BG ? '#444cf7' : 'rgba(0,0,0,0.2)'} 0.5px, transparent 0.5px)`,
-            backgroundSize: `${20 * scale}px ${20 * scale}px`,
-            backgroundPosition: `${stagePos.x}px ${stagePos.y}px`
-        }}>
+      elementsRef.current.find((el) => {
+        if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
+          const minX = Math.min(el.startX, el.endX || el.startX);
+          const maxX = Math.max(el.startX, el.endX || el.startX);
+          const minY = Math.min(el.startY, el.endY || el.startY);
+          const maxY = Math.max(el.startY, el.endY || el.startY);
+          return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+        }
+        return false;
+      }) || null
+    );
+  };
 
-            {/* Floating Toolbar Container - Expandable Mobile Dock */}
-            <div className="absolute bottom-6 sm:bottom-auto sm:top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col-reverse sm:flex-col items-center gap-3 pointer-events-none w-full sm:w-auto px-2">
+  // Clear canvas
+  const handleClear = () => {
+    if (confirm('Clear entire shared board?')) {
+      setElements([]);
+      socket.emit('canvas:clear');
+    }
+  };
 
-                {/* Mobile Toggle Button */}
-                <div className="sm:hidden pointer-events-auto mt-2">
-                    <button
-                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className={`text-white shadow-2xl rounded-full p-4 flex items-center justify-center transition-all duration-300 ${isMobileMenuOpen ? 'bg-zinc-800 rotate-90 scale-100' : 'bg-blue-600 rotate-0 scale-105'}`}
-                    >
-                        {isMobileMenuOpen ? <X size={24} /> : <Wrench size={24} />}
-                    </button>
-                </div>
+  // -----------------------------------------------------------
+  // Central Radial Pen Activation Handler
+  // -----------------------------------------------------------
+  const handleMainPenClick = () => {
+    if (activeTool === 'pen') {
+      // Toggle off to pan
+      setActiveTool('pan');
+      setIsRadialOpen(false);
+      setActivePanel(null);
+    } else {
+      // Per instructions: "when clicked on pen icon the first default one automatically select, no need to click on the 5 icons before that"
+      setActiveTool('pen');
+      setIsRadialOpen(true);
+      setActivePanel(null);
+    }
+  };
 
-                <div className={`bg-white shadow-2xl rounded-3xl sm:rounded-full px-2 sm:px-4 py-2 items-center gap-1 sm:gap-2 border border-zinc-200 pointer-events-auto max-w-[95vw] overflow-x-auto overflow-y-hidden transition-all duration-300 origin-bottom sm:origin-top ${isMobileMenuOpen ? 'flex scale-100 opacity-100' : 'hidden sm:flex scale-95 opacity-0 sm:scale-100 sm:opacity-100'}`}>
-                    <button
-                        onClick={() => { setTool('select'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'select' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Select & Resize"
-                    >
-                        <MousePointer2 size={20} />
-                    </button>
-                    <button
-                        onClick={() => { setTool('pan'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'pan' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Pan Tool (Hand)"
-                    >
-                        <Hand size={20} />
-                    </button>
-                    <button
-                        onClick={() => { setTool('pen'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'pen' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Pen Tool"
-                    >
-                        <Pencil size={20} />
-                    </button>
-                    <button
-                        onClick={() => { setTool('shape'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'shape' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Shapes Tool"
-                    >
-                        <Shapes size={20} />
-                    </button>
-                    <button
-                        onClick={() => setTool('text')}
-                        className={`p-3 rounded-full transition-all ${tool === 'text' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Text Tool"
-                    >
-                        <Type size={20} />
-                    </button>
-                    <button
-                        onClick={() => { setTool('voice'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'voice' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Voice Tool"
-                    >
-                        <Mic size={20} />
-                    </button>
-                    <button
-                        onClick={() => { setTool('image'); setActiveTextInput(null); }}
-                        className={`p-3 rounded-full transition-all ${tool === 'image' ? 'bg-blue-100 text-blue-600' : 'hover:bg-zinc-100 text-zinc-600'}`}
-                        title="Image Picker Tool"
-                    >
-                        <ImageIcon size={20} />
-                    </button>
-                </div>
+  const toggleSatellitePanel = (panel: 'size' | 'color' | 'shape' | 'fill' | 'eraser') => {
+    if (activePanel === panel) {
+      setActivePanel(null);
+    } else {
+      setActivePanel(panel);
+      if (panel === 'eraser') setActiveTool('eraser');
+      else if (panel === 'shape') setActiveTool('shape');
+      else if (panel === 'fill') setActiveTool('fill');
+      else setActiveTool('pen');
+    }
+  };
 
-                {/* Image Settings Submenu */}
-                {tool === 'image' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[250px]">
-                        {!stagedImageUrl && (
-                            <label className="flex items-center gap-2 px-6 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap">
-                                <ImageIcon size={20} /> Upload Image
-                                <input type="file" accept="image/*" onChange={handleImageUploadSelect} className="hidden" />
-                            </label>
-                        )}
-                        {stagedImageUrl && (
-                            <div className="flex flex-col items-center w-full">
-                                <p className="text-xs font-bold text-zinc-600 mb-3 uppercase tracking-widest bg-zinc-100 px-3 py-1 rounded-full border border-zinc-200 text-center">
-                                    Click canvas to place!
-                                </p>
-                                <img src={stagedImageUrl} alt="Staged" className="max-w-[240px] max-h-[160px] object-contain rounded-lg border border-zinc-200 shadow-sm bg-zinc-50/50" />
-                            </div>
-                        )}
-                    </div>
-                )}
+  return (
+    <div className="relative w-screen h-screen overflow-hidden bg-[#0a0c10] select-none text-slate-100 font-sans">
+      {/* ----------------------------------------------------------- */}
+      {/* 1. TOP-LEFT: Real-Time Coordinates HUD & Teleport Box */}
+      {/* ----------------------------------------------------------- */}
+      <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
+        <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl backdrop-blur-xl bg-slate-900/80 border border-slate-700/80 shadow-2xl">
+          <MapPin className="w-4 h-4 text-cyan-400 animate-pulse" />
+          <div className="font-mono text-xs flex items-center gap-3">
+            <span className="text-slate-400">
+              X: <strong className="text-slate-100">{Math.round(cursorWorldPos.x)}</strong>
+            </span>
+            <span className="text-slate-400">
+              Y: <strong className="text-slate-100">{Math.round(cursorWorldPos.y)}</strong>
+            </span>
+            <span className="text-indigo-400/80 border-l border-slate-700 pl-2">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
 
-                {/* Voice Settings Submenu */}
-                {tool === 'voice' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[250px]">
-                        {!isRecording && !recordedAudioUrl && (
-                            <button onClick={startRecording} className="flex items-center gap-2 px-6 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-bold transition-all shadow-sm">
-                                <Mic size={20} /> Start Recording
-                            </button>
-                        )}
-                        {isRecording && (
-                            <button onClick={stopRecording} className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold transition-all shadow-sm animate-pulse">
-                                <Square size={20} /> Stop Recording
-                            </button>
-                        )}
-                        {recordedAudioUrl && (
-                            <div className="flex flex-col items-center w-full">
-                                <p className="text-xs font-bold text-zinc-600 mb-3 uppercase tracking-widest bg-zinc-100 px-3 py-1 rounded-full border border-zinc-200 text-center">
-                                    Click canvas to paste!
-                                </p>
-                                <div className="flex gap-2 w-full">
-                                    <audio src={recordedAudioUrl} controls className="h-10 w-full rounded-lg" />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+          {/* Edit/Teleport Trigger Button */}
+          <button
+            onClick={() => {
+              setTeleportX(String(Math.round(cursorWorldPos.x)));
+              setTeleportY(String(Math.round(cursorWorldPos.y)));
+              setIsTeleportOpen((prev) => !prev);
+            }}
+            title="Edit coordinates & teleport"
+            className="ml-1 px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/40 text-[11px] font-semibold text-indigo-300 hover:text-white transition flex items-center gap-1 cursor-pointer"
+          >
+            <span>Edit</span>
+          </button>
+        </div>
 
-                {/* Pen Settings Submenu */}
-                {tool === 'pen' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[300px]">
-
-                        {/* Colors */}
-                        <div className="flex items-center gap-3 w-full justify-between">
-                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Color</span>
-                            <div className="flex items-center gap-2">
-                                <input type="color" value={brushColor} onChange={e => setBrushColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-full overflow-hidden" title="Custom color" />
-                                {['#000000', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'].map(c => (
-                                    <button
-                                        key={c}
-                                        onClick={() => setBrushColor(c)}
-                                        className={`w-6 h-6 rounded-full border-2 ${brushColor === c ? 'border-zinc-900 scale-110 shadow-sm' : 'border-black/5 hover:scale-110'} transition-all`}
-                                        style={{ backgroundColor: c }}
-                                        title={c}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="w-full h-px bg-zinc-100" />
-
-                        <div className="flex items-center gap-3 w-full justify-between">
-                            {/* Brush Size */}
-                            <div className="flex flex-col gap-2">
-                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Size</span>
-                                <div className="flex items-center gap-1 bg-zinc-50 p-1 rounded-lg border border-zinc-100">
-                                    {[2, 5, 10, 20].map(s => (
-                                        <button
-                                            key={s}
-                                            onClick={() => setBrushSize(s)}
-                                            className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${brushSize === s ? 'bg-white shadow-sm ring-1 ring-zinc-200' : 'hover:bg-zinc-200/50'}`}
-                                            title={`${s}px brush`}
-                                        >
-                                            <div className="bg-zinc-700 rounded-full" style={{ width: Math.min(s, 20), height: Math.min(s, 20) }} />
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Brush Style */}
-                            <div className="flex flex-col gap-2">
-                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Style</span>
-                                <div className="flex items-center gap-1 bg-zinc-50 p-1 rounded-lg border border-zinc-100">
-                                    <button
-                                        onClick={() => setBrushStyle('solid')}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${brushStyle === 'solid' ? 'bg-white shadow-sm ring-1 ring-zinc-200 text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}`}
-                                    >
-                                        Solid
-                                    </button>
-                                    <button
-                                        onClick={() => setBrushStyle('dashed')}
-                                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${brushStyle === 'dashed' ? 'bg-white shadow-sm ring-1 ring-zinc-200 text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}`}
-                                    >
-                                        Dashed
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                )}
-
-                {/* Shape Settings Submenu */}
-                {tool === 'shape' && (
-                    <div className="bg-white/95 backdrop-blur shadow-lg rounded-2xl px-5 py-4 flex flex-col items-center gap-4 border border-zinc-200 pointer-events-auto animate-in slide-in-from-bottom-2 sm:slide-in-from-top-2 fade-in min-w-[300px]">
-
-                        {/* Shape Types */}
-                        <div className="flex items-center gap-3 w-full justify-between">
-                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Shape</span>
-                            <div className="flex items-center gap-1 bg-zinc-50 p-1 rounded-lg border border-zinc-100">
-                                <button
-                                    onClick={() => setShapeType('rectangle')}
-                                    className={`px-3 py-1.5 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${shapeType === 'rectangle' ? 'bg-white shadow-sm ring-1 ring-zinc-200 text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}`}
-                                >
-                                    <Square size={14} /> Rect
-                                </button>
-                                <button
-                                    onClick={() => setShapeType('ellipse')}
-                                    className={`px-3 py-1.5 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${shapeType === 'ellipse' ? 'bg-white shadow-sm ring-1 ring-zinc-200 text-zinc-900' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}`}
-                                >
-                                    <CircleIcon size={14} /> Circle
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="w-full h-px bg-zinc-100" />
-
-                        {/* Colors */}
-                        <div className="flex items-center gap-3 w-full justify-between">
-                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Color</span>
-                            <div className="flex items-center gap-2">
-                                <input type="color" value={brushColor} onChange={e => setBrushColor(e.target.value)} className="w-8 h-8 cursor-pointer rounded-full overflow-hidden" title="Custom color" />
-                                {['#000000', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7'].map(c => (
-                                    <button
-                                        key={c}
-                                        onClick={() => setBrushColor(c)}
-                                        className={`w-6 h-6 rounded-full border-2 ${brushColor === c ? 'border-zinc-900 scale-110 shadow-sm' : 'border-black/5 hover:scale-110'} transition-all`}
-                                        style={{ backgroundColor: c }}
-                                        title={c}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="w-full h-px bg-zinc-100" />
-
-                    </div>
-                )}
+        {/* Teleport Dropdown Box */}
+        {isTeleportOpen && (
+          <div className="absolute top-12 left-0 w-72 p-4 rounded-2xl backdrop-blur-2xl bg-slate-900/95 border border-indigo-500/30 shadow-2xl space-y-3 z-40">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-cyan-400" /> Teleport to Coordinates
+              </span>
+              <button
+                onClick={() => setIsTeleportOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Info Panel & Live X/Y Coordinator */}
-            <div className="absolute bottom-6 right-4 sm:bottom-4 sm:right-4 z-10 bg-white/90 backdrop-blur shadow-lg rounded-xl p-3 sm:p-4 min-w-[120px] sm:min-w-[150px] border border-zinc-200 text-sm flex flex-col gap-2">
-                <div className="flex flex-col items-center gap-2">
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            const formData = new FormData(e.currentTarget);
-                            const navX = parseInt(formData.get('navX') as string, 10);
-                            const navY = parseInt(formData.get('navY') as string, 10);
-
-                            if (!isNaN(navX) && !isNaN(navY)) {
-                                setStagePos({
-                                    x: dimensions.width / 2 - navX * scale,
-                                    y: dimensions.height / 2 - navY * scale
-                                });
-                            }
-                            setIsNavigating(false);
-                            (document.activeElement as HTMLElement)?.blur();
-                        }}
-                        className="font-mono text-xs bg-black/5 text-zinc-900 border border-black/10 p-1.5 rounded-lg shadow-inner flex flex-col gap-1.5 pointer-events-auto"
-                    >
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-zinc-500 font-bold ml-1">X</span>
-                            <input
-                                name="navX"
-                                type="number"
-                                value={pointerPos.x}
-                                onChange={(e) => setPointerPos(p => ({ ...p, x: parseInt(e.target.value) || 0 }))}
-                                onFocus={() => setIsNavigating(true)}
-                                onBlur={() => setIsNavigating(false)}
-                                className="w-16 bg-white/70 px-1 py-0.5 border border-zinc-200 rounded text-right outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm"
-                                title="Edit X to jump"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-zinc-500 font-bold ml-1">Y</span>
-                            <input
-                                name="navY"
-                                type="number"
-                                value={pointerPos.y}
-                                onChange={(e) => setPointerPos(p => ({ ...p, y: parseInt(e.target.value) || 0 }))}
-                                onFocus={() => setIsNavigating(true)}
-                                onBlur={() => setIsNavigating(false)}
-                                className="w-16 bg-white/70 px-1 py-0.5 border border-zinc-200 rounded text-right outline-none focus:border-blue-500 focus:bg-white transition-all shadow-sm"
-                                title="Edit Y to jump"
-                            />
-                        </div>
-                        <button type="submit" className="hidden">Go</button>
-                    </form>
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-mono">Target X</label>
+                <input
+                  type="number"
+                  value={teleportX}
+                  onChange={(e) => setTeleportX(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && teleportTo(Number(teleportX), Number(teleportY))}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 uppercase font-mono">Target Y</label>
+                <input
+                  type="number"
+                  value={teleportY}
+                  onChange={(e) => setTeleportY(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && teleportTo(Number(teleportX), Number(teleportY))}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
             </div>
 
-            {/* EASTER EGG ZONE: Coordinates (30000, 30000) */}
-            {Math.abs(pointerPos.x - 30000) < 800 && Math.abs(pointerPos.y - 30000) < 800 && (
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-10 pointer-events-none">
-                    <div className="bg-zinc-900 text-white font-mono px-6 py-3 rounded-xl border-2 border-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.3)] animate-pulse pointer-events-auto">
-                        <p className="text-center text-sm font-bold text-yellow-300 tracking-widest uppercase mb-2">Secret Location Discovered!</p>
-                        <p className="text-center text-xs opacity-80">You have traveled 30,000 pixels from Spawn.</p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => teleportTo(Number(teleportX), Number(teleportY))}
+                className="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 hover:brightness-110 transition cursor-pointer"
+              >
+                Teleport Now
+              </button>
+              <button
+                onClick={() => teleportTo(0, 0)}
+                title="Reset to origin (0, 0)"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 transition cursor-pointer"
+              >
+                Origin (0,0)
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
-                        <div className="mt-4 flex flex-col gap-2">
-                            <button
-                                onClick={() => {
-                                    if (!hasClickedYellow) {
-                                        socket.emit('change_bg', '#fef08a');
-                                        setHasClickedYellow(true);
-                                    }
-                                }}
-                                disabled={hasClickedYellow}
-                                className={`w-full py-2 px-4 rounded-lg font-bold transition-all shadow-md flex items-center justify-center gap-2 ${hasClickedYellow ? 'bg-yellow-100 text-yellow-600 opacity-50 cursor-not-allowed hidden' : 'text-zinc-900 bg-yellow-300 hover:bg-yellow-200 active:scale-95'}`}
-                            >
-                                ✨ Paint World Yellow ✨
-                            </button>
-                            <button
-                                onClick={() => socket.emit('change_bg', '#e5e5f7')}
-                                className="w-full py-2 px-4 rounded-lg font-bold text-zinc-400 border border-zinc-700 hover:bg-zinc-800 transition-all shadow-md active:scale-95"
-                            >
-                                Restore Original Sky
-                            </button>
-                        </div>
-                    </div>
+      {/* ----------------------------------------------------------- */}
+      {/* 2. TOP-RIGHT: Live Connection & Peer Counter */}
+      {/* ----------------------------------------------------------- */}
+      <div className="absolute top-4 right-4 z-30 flex items-center gap-3">
+        <div
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-medium backdrop-blur-xl ${
+            isConnected
+              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+          }`}
+        >
+          {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+          <span>{isConnected ? 'Live Sync' : 'Offline'}</span>
+          {pingMs !== null && isConnected && (
+            <span className="font-mono text-[11px] opacity-75">{pingMs}ms</span>
+          )}
+        </div>
+
+        <button
+          onClick={handleClear}
+          title="Clear Board"
+          className="p-2 rounded-xl backdrop-blur-xl bg-slate-900/80 hover:bg-rose-900/30 border border-slate-700/80 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* ----------------------------------------------------------- */}
+      {/* 3. MIDDLE-BOTTOM: Simulator Drawing Hub (Big Circular Button + 5 Satellites) */}
+      {/* ----------------------------------------------------------- */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+        {/* Floating Rectangular Config Panel (Opens above when satellite is clicked) */}
+        {activePanel && (
+          <div className="mb-4 p-4 rounded-2xl backdrop-blur-2xl bg-slate-900/95 border border-indigo-500/30 shadow-2xl min-w-[280px] max-w-sm animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-800">
+              <span className="text-xs font-semibold text-white capitalize flex items-center gap-1.5">
+                {activePanel === 'size' && <Sliders className="w-3.5 h-3.5 text-cyan-400" />}
+                {activePanel === 'color' && <Palette className="w-3.5 h-3.5 text-cyan-400" />}
+                {activePanel === 'shape' && <Square className="w-3.5 h-3.5 text-cyan-400" />}
+                {activePanel === 'fill' && <PaintBucket className="w-3.5 h-3.5 text-cyan-400" />}
+                {activePanel === 'eraser' && <Eraser className="w-3.5 h-3.5 text-cyan-400" />}
+                {activePanel} Options
+              </span>
+              <button onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* 1. Size / Thickness Panel */}
+            {activePanel === 'size' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-300">
+                  <span>Stroke Width:</span>
+                  <span className="font-mono text-cyan-400 font-bold">{strokeWidth}px</span>
                 </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="48"
+                  value={strokeWidth}
+                  onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer"
+                />
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  {PRESET_SIZES.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => setStrokeWidth(preset.value)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
+                        strokeWidth === preset.value
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
-            <Stage
-                width={dimensions.width}
-                height={dimensions.height}
-                draggable={tool === 'pan'}
-                onWheel={handleWheel}
-                onDragMove={(e) => {
-                    setStagePos({ x: e.target.x(), y: e.target.y() });
-                }}
-                onDragEnd={(e) => {
-                    setStagePos({ x: e.target.x(), y: e.target.y() });
-                }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onClick={handleStageClick}
-                onTap={handleStageClick}
-                x={stagePos.x}
-                y={stagePos.y}
-                scaleX={scale}
-                scaleY={scale}
-                className={tool === 'pan' ? 'cursor-grab active:cursor-grabbing' : tool === 'pen' ? 'cursor-crosshair' : (tool === 'voice' && recordedAudioUrl) || (tool === 'image' && stagedImageUrl) ? 'cursor-crosshair' : 'cursor-text'}
-            >
-                <Layer>
-                    {elements.map((el) => {
-                        if (el.type === 'brush') {
-                            return (
-                                <Line
-                                    key={el.id}
-                                    points={(el as BrushElement).points}
-                                    stroke={(el as BrushElement).color}
-                                    strokeWidth={(el as BrushElement).strokeWidth}
-                                    dash={(el as BrushElement).dash}
-                                    tension={0.5}
-                                    lineCap="round"
-                                    lineJoin="round"
-                                />
-                            );
-                        }
-                        if (el.type === 'image') {
-                            return <URLImage key={el.id} element={el as ImageElement} tool={tool} setSelectedId={setSelectedId} handleDragEnd={handleDragEnd} />;
-                        }
-                        if (el.type === 'shape') {
-                            const shapeEl = el as ShapeElement;
-                            if (shapeEl.shapeType === 'rectangle') {
-                                return (
-                                    <Rect
-                                        key={el.id}
-                                        id={el.id}
-                                        x={shapeEl.x}
-                                        y={shapeEl.y}
-                                        width={shapeEl.width}
-                                        height={shapeEl.height}
-                                        fill={shapeEl.fillColor === 'transparent' ? undefined : shapeEl.fillColor}
-                                        stroke={shapeEl.strokeColor}
-                                        strokeWidth={shapeEl.strokeWidth}
-                                        hitStrokeWidth={Math.max(shapeEl.strokeWidth, 10)}
-                                        scaleX={shapeEl.scaleX || 1}
-                                        scaleY={shapeEl.scaleY || 1}
-                                        rotation={shapeEl.rotation || 0}
-                                        draggable={tool === 'select'}
-                                        onDragEnd={(e) => handleDragEnd(e, el.id)}
-                                        onClick={() => { if (tool === 'select') setSelectedId(el.id); }}
-                                        onTap={() => { if (tool === 'select') setSelectedId(el.id); }}
-                                    />
-                                );
-                            } else if (shapeEl.shapeType === 'ellipse') {
-                                return (
-                                    <Ellipse
-                                        key={el.id}
-                                        id={el.id}
-                                        x={shapeEl.x}
-                                        y={shapeEl.y}
-                                        radiusX={Math.abs(shapeEl.width / 2)}
-                                        radiusY={Math.abs(shapeEl.height / 2)}
-                                        fill={shapeEl.fillColor === 'transparent' ? undefined : shapeEl.fillColor}
-                                        stroke={shapeEl.strokeColor}
-                                        strokeWidth={shapeEl.strokeWidth}
-                                        hitStrokeWidth={Math.max(shapeEl.strokeWidth, 10)}
-                                        scaleX={shapeEl.scaleX || 1}
-                                        scaleY={shapeEl.scaleY || 1}
-                                        rotation={shapeEl.rotation || 0}
-                                        draggable={tool === 'select'}
-                                        onDragEnd={(e) => handleDragEnd(e, el.id)}
-                                        onClick={() => { if (tool === 'select') setSelectedId(el.id); }}
-                                        onTap={() => { if (tool === 'select') setSelectedId(el.id); }}
-                                    />
-                                );
-                            }
-                        }
-                        // Text is handled in HTML overlay
-                        return null;
-                    })}
-
-                    {/* Welcome Greeting at Origin rendered ON TOP */}
-                    <Circle
-                        x={0}
-                        y={0}
-                        radius={220}
-                        fill="#ffffff"
-                        opacity={0.9}
-                        stroke="#e5e7eb"
-                        strokeWidth={2}
-                        shadowColor="rgba(0,0,0,0.1)"
-                        shadowBlur={15}
-                        shadowOffsetY={5}
-                        listening={false} // pass through clicks
+            {/* 2. Color Palette Panel */}
+            {activePanel === 'color' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-5 gap-2">
+                  {PRESET_COLORS.map((col) => (
+                    <button
+                      key={col}
+                      onClick={() => {
+                        setCurrentColor(col);
+                        if (isFillActive) setFillColor(col);
+                      }}
+                      className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer shadow-md"
+                      style={{
+                        backgroundColor: col,
+                        borderColor: currentColor === col ? '#ffffff' : 'transparent',
+                      }}
                     />
-                    <KonvaText
-                        x={-180}
-                        y={-40}
-                        width={360}
-                        text="Welcome to Webtigo Infinity Canvas"
-                        fontSize={26}
-                        fontStyle="bold"
-                        fontFamily="sans-serif"
-                        fill="#1e40af"
-                        align="center"
-                        listening={false}
-                    />
-                    <KonvaText
-                        x={-180}
-                        y={20}
-                        width={360}
-                        text="Scroll to zoom.\nSelect Pan to drag the world.\nDouble-click text to edit it!"
-                        fontSize={16}
-                        fontFamily="sans-serif"
-                        fill="#4b5563"
-                        align="center"
-                        lineHeight={1.6}
-                        listening={false}
-                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                  <span className="text-xs text-slate-400">Custom:</span>
+                  <input
+                    type="color"
+                    value={currentColor}
+                    onChange={(e) => {
+                      setCurrentColor(e.target.value);
+                      if (isFillActive) setFillColor(e.target.value);
+                    }}
+                    className="w-8 h-8 rounded-lg bg-transparent cursor-pointer border border-slate-700"
+                  />
+                  <span className="font-mono text-xs text-slate-300 uppercase">{currentColor}</span>
+                </div>
+              </div>
+            )}
 
-                    {selectedId && <TransformerComponent selectedId={selectedId} onTransformEnd={handleTransformEnd} />}
-                </Layer>
-            </Stage>
-
-            {/* HTML Overlays for Text Elements */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    pointerEvents: 'none',
-                    zIndex: 20
-                }}
-            >
-                {elements.map((el) => {
-                    if (el.type === 'text') {
-                        // Hide it if we are currently editing it
-                        if (activeTextInput && activeTextInput.id === el.id) return null;
-
-                        return (
-                            <div
-                                key={el.id}
-                                onDoubleClick={() => {
-                                    if (tool === 'text' || tool === 'pan') {
-                                        setActiveTextInput({
-                                            x: el.x,
-                                            y: el.y,
-                                            value: (el as TextElement).text,
-                                            id: el.id
-                                        });
-                                        setTool('text');
-                                    }
-                                }}
-                                style={{
-                                    position: 'absolute',
-                                    top: el.y * scale + stagePos.y,
-                                    left: el.x * scale + stagePos.x,
-                                    fontSize: `${(el as TextElement).fontSize * scale}px`,
-                                    color: (el as TextElement).color,
-                                    fontFamily: 'sans-serif',
-                                    whiteSpace: 'pre-wrap',
-                                    wordWrap: 'break-word',
-                                    pointerEvents: 'auto', // Allow highlighting and interactions!
-                                    cursor: tool === 'text' ? 'text' : 'auto',
-                                    userSelect: 'text' // Allows selection natively
-                                }}
-                            >
-                                {(el as TextElement).text}
-                            </div>
-                        );
-                    }
-                    if (el.type === 'audio') {
-                        return (
-                            <div
-                                key={el.id}
-                                style={{
-                                    position: 'absolute',
-                                    top: el.y * scale + stagePos.y,
-                                    left: el.x * scale + stagePos.x,
-                                    pointerEvents: 'auto',
-                                    transform: `scale(${scale})`,
-                                    transformOrigin: 'top left'
-                                }}
-                            >
-                                <div className="bg-white/90 p-1.5 rounded-full shadow-md border border-zinc-200 flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
-                                    <audio src={(el as AudioElement).src} controls className="h-8 max-w-[200px]" />
-                                </div>
-                            </div>
-                        );
-                    }
-                    return null;
-                })}
-
-                {/* Active Text Input */}
-                {activeTextInput && (
-                    <div
-                        ref={contentEditableRef}
-                        contentEditable
-                        suppressContentEditableWarning
-                        onBlur={commitTextInput}
-                        style={{
-                            position: 'absolute',
-                            top: activeTextInput.y * scale + stagePos.y,
-                            left: activeTextInput.x * scale + stagePos.x,
-                            fontSize: `${24 * scale}px`,
-                            color: 'black',
-                            fontFamily: 'sans-serif',
-                            background: 'white',
-                            border: '1px solid #3b82f6',
-                            outline: 'none',
-                            minWidth: `${20 * scale}px`,
-                            minHeight: `${24 * scale}px`,
-                            whiteSpace: 'pre-wrap',
-                            wordWrap: 'break-word',
-                            cursor: 'text',
-                            pointerEvents: 'auto',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                            padding: '2px 4px'
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                                commitTextInput();
-                            }
-                        }}
+            {/* 3. Shapes Panel */}
+            {activePanel === 'shape' && (
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { type: 'rect' as ShapeType, icon: Square, label: 'Box' },
+                  { type: 'circle' as ShapeType, icon: Circle, label: 'Oval' },
+                  { type: 'line' as ShapeType, icon: Minus, label: 'Line' },
+                  { type: 'arrow' as ShapeType, icon: MoveRight, label: 'Arrow' },
+                  { type: 'star' as ShapeType, icon: Star, label: 'Star' },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.type}
+                      onClick={() => {
+                        setSelectedShape(s.type);
+                        setActiveTool('shape');
+                      }}
+                      className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition cursor-pointer ${
+                        selectedShape === s.type && activeTool === 'shape'
+                          ? 'bg-indigo-600/30 border-cyan-400 text-white'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
                     >
-                        {activeTextInput.value}
-                    </div>
-                )}
-            </div>
+                      <Icon className="w-5 h-5" />
+                      <span className="text-[10px]">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 4. Bucket Fill Panel */}
+            {activePanel === 'fill' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300">Fill Shapes & Surfaces:</span>
+                  <button
+                    onClick={() => setIsFillActive(!isFillActive)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                      isFillActive
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
+                  >
+                    {isFillActive ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  When enabled, all newly drawn shapes and clicked areas are automatically filled.
+                </p>
+              </div>
+            )}
+
+            {/* 5. Eraser Panel */}
+            {activePanel === 'eraser' && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-300">Precision Eraser Active</p>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Click and drag across any stroke or shape on the canvas to erase it instantly.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Radial Satellite Circles Container */}
+        <div className="relative flex items-center justify-center">
+          {/* 5 Animated Surrounding Satellites (Desktop Radial / Mobile Row) */}
+          <div
+            className={`transition-all duration-300 ${
+              isRadialOpen
+                ? 'opacity-100 scale-100 pointer-events-auto'
+                : 'opacity-0 scale-75 pointer-events-none'
+            } flex items-center gap-3 sm:absolute sm:inset-0 sm:items-center sm:justify-center`}
+          >
+            {/* Satellite 1: Size (Top-Left / Offset) */}
+            <button
+              onClick={() => toggleSatellitePanel('size')}
+              title="Pen Size & Style"
+              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:-translate-x-24 sm:-translate-y-12 ${
+                activePanel === 'size'
+                  ? 'bg-cyan-500 border-white text-slate-950 shadow-cyan-500/40'
+                  : 'bg-slate-900/90 border-slate-700 text-cyan-400 hover:text-white'
+              }`}
+            >
+              <Sliders className="w-5 h-5" />
+            </button>
+
+            {/* Satellite 2: Color (Top / Offset) */}
+            <button
+              onClick={() => toggleSatellitePanel('color')}
+              title="Color Palette"
+              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:-translate-x-12 sm:-translate-y-24 ${
+                activePanel === 'color'
+                  ? 'bg-indigo-500 border-white text-white shadow-indigo-500/40'
+                  : 'bg-slate-900/90 border-slate-700 text-indigo-400 hover:text-white'
+              }`}
+            >
+              <div
+                className="w-5 h-5 rounded-full border border-white/60 shadow-inner"
+                style={{ backgroundColor: currentColor }}
+              />
+            </button>
+
+            {/* Satellite 3: Shapes (Top-Center / Offset) */}
+            <button
+              onClick={() => toggleSatellitePanel('shape')}
+              title="Shapes Tool"
+              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-12 sm:-translate-y-24 ${
+                activePanel === 'shape'
+                  ? 'bg-purple-500 border-white text-white shadow-purple-500/40'
+                  : 'bg-slate-900/90 border-slate-700 text-purple-400 hover:text-white'
+              }`}
+            >
+              <Square className="w-5 h-5" />
+            </button>
+
+            {/* Satellite 4: Bucket (Top-Right / Offset) */}
+            <button
+              onClick={() => toggleSatellitePanel('fill')}
+              title="Bucket Fill"
+              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-24 sm:-translate-y-12 ${
+                activePanel === 'fill'
+                  ? 'bg-amber-500 border-white text-slate-950 shadow-amber-500/40'
+                  : 'bg-slate-900/90 border-slate-700 text-amber-400 hover:text-white'
+              }`}
+            >
+              <PaintBucket className="w-5 h-5" />
+            </button>
+
+            {/* Satellite 5: Eraser (Right / Offset) */}
+            <button
+              onClick={() => toggleSatellitePanel('eraser')}
+              title="Eraser"
+              className={`w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-xl border shadow-lg transition-transform hover:scale-110 cursor-pointer sm:absolute sm:translate-x-32 sm:translate-y-0 ${
+                activePanel === 'eraser'
+                  ? 'bg-rose-500 border-white text-white shadow-rose-500/40'
+                  : 'bg-slate-900/90 border-slate-700 text-rose-400 hover:text-white'
+              }`}
+            >
+              <Eraser className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Central Big Circular Pen Button */}
+          <button
+            onClick={handleMainPenClick}
+            title={activeTool === 'pen' ? 'Drawing Mode Active (Click to Pan)' : 'Start Drawing (Default Pen)'}
+            className={`relative z-10 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 cursor-pointer ${
+              activeTool === 'pen'
+                ? 'bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 text-white shadow-cyan-500/50 ring-4 ring-cyan-400/40'
+                : 'bg-slate-900/90 hover:bg-slate-800 border-2 border-slate-700 text-slate-200'
+            }`}
+          >
+            <Pen className={`w-7 h-7 transition-transform ${activeTool === 'pen' ? 'scale-110' : ''}`} />
+
+            {/* Pulsing indicator ring when drawing active */}
+            {activeTool === 'pen' && (
+              <span className="absolute -inset-1 rounded-full bg-cyan-400/20 animate-ping -z-10" />
+            )}
+          </button>
         </div>
-    );
+      </div>
+
+      {/* ----------------------------------------------------------- */}
+      {/* 4. BOTTOM-RIGHT: Rocket Jet Speed Mode & Physics */}
+      {/* ----------------------------------------------------------- */}
+      <div className="absolute bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+        {/* Rocket Speed Controls (Shows when Rocket Mode is on) */}
+        {isRocketMode && (
+          <div className="p-3 rounded-2xl backdrop-blur-xl bg-slate-900/90 border border-amber-500/40 shadow-2xl space-y-2 text-xs animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between gap-3 text-slate-300 font-semibold">
+              <span className="flex items-center gap-1.5 text-amber-400">
+                <Flame className={`w-4 h-4 ${isThrusting ? 'animate-bounce text-amber-300' : ''}`} />
+                Jet Thrusters
+              </span>
+              <span className="font-mono text-amber-300">{rocketSpeed}x</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {[8, 18, 32].map((spd) => (
+                <button
+                  key={spd}
+                  onClick={() => setRocketSpeed(spd)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer ${
+                    rocketSpeed === spd
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {spd === 8 ? 'Cruiser' : spd === 18 ? 'Sonic' : 'Warp'}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-tight">
+              Move cursor near screen edges to ignite thrusters!
+            </p>
+          </div>
+        )}
+
+        {/* Main Rocket Toggle Button */}
+        <button
+          onClick={() => setIsRocketMode((prev) => !prev)}
+          title={isRocketMode ? 'Disable Rocket Mode' : 'Enable Rocket Jet Speed Navigation'}
+          className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl backdrop-blur-xl shadow-2xl border transition-all transform hover:scale-105 active:scale-95 cursor-pointer ${
+            isRocketMode
+              ? 'bg-gradient-to-r from-amber-500 to-orange-600 border-amber-400/80 text-slate-950 font-bold shadow-amber-500/40'
+              : 'bg-slate-900/85 hover:bg-slate-800 border-slate-700/80 text-slate-300'
+          }`}
+        >
+          <Rocket
+            className={`w-5 h-5 transition-transform ${
+              isRocketMode ? 'animate-pulse text-slate-950' : 'text-amber-400'
+            }`}
+          />
+          <span className="text-xs font-semibold tracking-wide">
+            {isRocketMode ? 'Rocket Jet Active' : 'Rocket Jet Mode'}
+          </span>
+        </button>
+      </div>
+
+      {/* ----------------------------------------------------------- */}
+      {/* 5. CUSTOM ROCKET CURSOR (When Rocket Jet Mode is active) */}
+      {/* ----------------------------------------------------------- */}
+      {isRocketMode && (
+        <div
+          className="fixed pointer-events-none z-50 transition-transform duration-75 ease-out"
+          style={{
+            left: `${mouseScreenPos.current.x}px`,
+            top: `${mouseScreenPos.current.y}px`,
+            transform: `translate(-50%, -50%) rotate(${rocketAngle}deg)`,
+          }}
+        >
+          <div className="relative flex items-center justify-center">
+            <Rocket
+              className={`w-8 h-8 filter drop-shadow-[0_0_10px_rgba(245,158,11,0.8)] ${
+                isThrusting ? 'text-amber-300 scale-125' : 'text-amber-400'
+              }`}
+            />
+            {isThrusting && (
+              <span className="absolute -bottom-3 w-2.5 h-5 bg-gradient-to-t from-transparent via-amber-400 to-red-500 rounded-full blur-[1px] animate-pulse" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* 6. PRIMARY INTERACTIVE HTML5 CANVAS */}
+      {/* ----------------------------------------------------------- */}
+      <canvas
+        ref={canvasRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
+        className={`w-full h-full block touch-none ${
+          isRocketMode
+            ? 'cursor-none'
+            : activeTool === 'pen'
+            ? 'cursor-crosshair'
+            : activeTool === 'eraser'
+            ? 'cursor-cell'
+            : activeTool === 'shape'
+            ? 'cursor-crosshair'
+            : 'cursor-grab active:cursor-grabbing'
+        }`}
+      />
+    </div>
+  );
 }
