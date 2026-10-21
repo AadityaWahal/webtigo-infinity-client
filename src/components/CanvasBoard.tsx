@@ -454,6 +454,10 @@ export default function CanvasBoard() {
   // Pointer Events & Drawing Handlers
   // -----------------------------------------------------------
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Dismiss open popup panels when interacting with the canvas
+    if (activePanel) setActivePanel(null);
+    if (isTeleportOpen) setIsTeleportOpen(false);
+
     isInteracting.current = true;
     const worldPoint = screenToWorld(e.clientX, e.clientY);
     startPoint.current = worldPoint;
@@ -1134,7 +1138,7 @@ export default function CanvasBoard() {
             <button
               onClick={() => toggleSatellitePanel('size')}
               title="Size & Thickness"
-              className={`satellite-btn satellite-1 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              className={`satellite-btn satellite-1 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
                 height: 44,
@@ -1154,7 +1158,7 @@ export default function CanvasBoard() {
             <button
               onClick={() => toggleSatellitePanel('color')}
               title="Color Palette"
-              className={`satellite-btn satellite-2 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              className={`satellite-btn satellite-2 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
                 height: 44,
@@ -1181,7 +1185,7 @@ export default function CanvasBoard() {
             <button
               onClick={() => toggleSatellitePanel('shape')}
               title="Shapes Tool"
-              className={`satellite-btn satellite-3 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              className={`satellite-btn satellite-3 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
                 height: 44,
@@ -1201,7 +1205,7 @@ export default function CanvasBoard() {
             <button
               onClick={() => toggleSatellitePanel('fill')}
               title="Bucket Fill"
-              className={`satellite-btn satellite-4 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              className={`satellite-btn satellite-4 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
                 height: 44,
@@ -1221,7 +1225,7 @@ export default function CanvasBoard() {
             <button
               onClick={() => toggleSatellitePanel('eraser')}
               title="Eraser"
-              className={`satellite-btn satellite-5 btn-hover-scale glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
+              className={`satellite-btn satellite-5 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
                 height: 44,
@@ -1242,7 +1246,7 @@ export default function CanvasBoard() {
           <button
             onClick={handleMainPenClick}
             title={activeTool === 'pen' ? 'Drawing Active (Click to Pan)' : 'Start Drawing (Default Pen)'}
-            className="btn-hover-scale"
+            className="main-pen-btn"
             style={{
               position: 'relative',
               zIndex: 10,
