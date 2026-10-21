@@ -20,7 +20,6 @@ import {
   Wifi,
   WifiOff,
   Flame,
-  Trash2,
   Check,
 } from 'lucide-react';
 
@@ -185,14 +184,14 @@ export default function CanvasBoard() {
     ctx.fillStyle = '#07090e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Infinite Dot Matrix Grid
+    // Infinite Dot Matrix Grid (Flawless modulo for infinite negative/positive coords)
     const gridSize = 36 * zoom;
-    const offsetX = panOffset.x % gridSize;
-    const offsetY = panOffset.y % gridSize;
+    const offsetX = ((panOffset.x % gridSize) + gridSize) % gridSize;
+    const offsetY = ((panOffset.y % gridSize) + gridSize) % gridSize;
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-    for (let x = offsetX; x < canvas.width; x += gridSize) {
-      for (let y = offsetY; y < canvas.height; y += gridSize) {
+    for (let x = offsetX - gridSize; x < canvas.width + gridSize; x += gridSize) {
+      for (let y = offsetY - gridSize; y < canvas.height + gridSize; y += gridSize) {
         ctx.beginPath();
         ctx.arc(x, y, 1.2 * Math.min(zoom, 1.5), 0, Math.PI * 2);
         ctx.fill();
@@ -327,50 +326,45 @@ export default function CanvasBoard() {
   }, [elements, panOffset, zoom, renderCanvas]);
 
   // -----------------------------------------------------------
-  // Rocket Mode 2D Physics Loop (Edge Proximity Acceleration)
+  // Rocket Mode 2D Physics Loop (Click-to-Fly Infinite Propulsion)
   // -----------------------------------------------------------
+  const isRocketClickActive = useRef(false);
+
   useEffect(() => {
     if (!isRocketMode) {
       setIsThrusting(false);
+      isRocketClickActive.current = false;
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
       return;
     }
 
-    const proximityThreshold = 140; // Pixels from viewport edges
-
     const rocketTick = () => {
       const { innerWidth: width, innerHeight: height } = window;
+      const centerX = width / 2;
+      const centerY = height / 2;
       const mouseX = mouseScreenPos.current.x;
       const mouseY = mouseScreenPos.current.y;
 
-      let dx = 0;
-      let dy = 0;
+      const dirX = mouseX - centerX;
+      const dirY = mouseY - centerY;
+      const dist = Math.hypot(dirX, dirY);
 
-      // Accelerate towards whichever edge the mouse is near
-      if (mouseX < proximityThreshold) {
-        const factor = (proximityThreshold - mouseX) / proximityThreshold;
-        dx += factor * rocketSpeed;
-      } else if (mouseX > width - proximityThreshold) {
-        const factor = (mouseX - (width - proximityThreshold)) / proximityThreshold;
-        dx -= factor * rocketSpeed;
-      }
-
-      if (mouseY < proximityThreshold) {
-        const factor = (proximityThreshold - mouseY) / proximityThreshold;
-        dy += factor * rocketSpeed;
-      } else if (mouseY > height - proximityThreshold) {
-        const factor = (mouseY - (height - proximityThreshold)) / proximityThreshold;
-        dy -= factor * rocketSpeed;
-      }
-
-      if (dx !== 0 || dy !== 0) {
-        setIsThrusting(true);
-        const angleDeg = (Math.atan2(-dy, -dx) * 180) / Math.PI + 90;
+      // Rocket smoothly faces the cursor direction relative to screen center
+      if (dist > 5) {
+        const angleDeg = (Math.atan2(dirY, dirX) * 180) / Math.PI + 90;
         setRocketAngle(angleDeg);
+      }
 
+      // Movement ONLY occurs when user clicks and holds down in rocket mode
+      if (isRocketClickActive.current && dist > 10) {
+        setIsThrusting(true);
+        const normX = dirX / dist;
+        const normY = dirY / dist;
+
+        // Smooth infinite camera velocity in rocket heading
         setPanOffset((prev) => ({
-          x: prev.x + dx,
-          y: prev.y + dy,
+          x: prev.x - normX * rocketSpeed,
+          y: prev.y - normY * rocketSpeed,
         }));
       } else {
         setIsThrusting(false);
@@ -384,6 +378,18 @@ export default function CanvasBoard() {
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
     };
   }, [isRocketMode, rocketSpeed]);
+
+  // Global window pointerup to safely disengage thrusters anywhere
+  useEffect(() => {
+    const handleGlobalPointerUp = () => {
+      if (isRocketClickActive.current) {
+        isRocketClickActive.current = false;
+        setIsThrusting(false);
+      }
+    };
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
+  }, []);
 
   // -----------------------------------------------------------
   // Socket.io Real-Time Synchronization
@@ -419,10 +425,6 @@ export default function CanvasBoard() {
       setElements((prev) => prev.filter((el) => el.id !== elementId));
     };
 
-    const onCanvasCleared = () => {
-      setElements([]);
-    };
-
     const onUsersCount = (data: { onlineUsers: number }) => {
       if (data && typeof data.onlineUsers === 'number') {
         setOnlineUsers(data.onlineUsers);
@@ -434,7 +436,6 @@ export default function CanvasBoard() {
     socket.on('endlessync:init', onInit);
     socket.on('element:added', onElementAdded);
     socket.on('element:erased', onElementErased);
-    socket.on('canvas:cleared', onCanvasCleared);
     socket.on('endlessync:users_count', onUsersCount);
 
     if (socket.connected) setIsConnected(true);
@@ -445,7 +446,6 @@ export default function CanvasBoard() {
       socket.off('endlessync:init', onInit);
       socket.off('element:added', onElementAdded);
       socket.off('element:erased', onElementErased);
-      socket.off('canvas:cleared', onCanvasCleared);
       socket.off('endlessync:users_count', onUsersCount);
     };
   }, []);
@@ -457,6 +457,12 @@ export default function CanvasBoard() {
     // Dismiss open popup panels when interacting with the canvas
     if (activePanel) setActivePanel(null);
     if (isTeleportOpen) setIsTeleportOpen(false);
+
+    if (isRocketMode) {
+      isRocketClickActive.current = true;
+      setIsThrusting(true);
+      return;
+    }
 
     isInteracting.current = true;
     const worldPoint = screenToWorld(e.clientX, e.clientY);
@@ -564,6 +570,12 @@ export default function CanvasBoard() {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isRocketMode) {
+      isRocketClickActive.current = false;
+      setIsThrusting(false);
+      return;
+    }
+
     if (!isInteracting.current) return;
     isInteracting.current = false;
     const worldPoint = screenToWorld(e.clientX, e.clientY);
@@ -646,13 +658,6 @@ export default function CanvasBoard() {
         return false;
       }) || null
     );
-  };
-
-  const handleClear = () => {
-    if (confirm('Clear entire canvas?')) {
-      setElements([]);
-      socket.emit('canvas:clear');
-    }
   };
 
   // Main Pen button click:
@@ -894,21 +899,6 @@ export default function CanvasBoard() {
             </span>
           )}
         </div>
-
-        <button
-          onClick={handleClear}
-          title="Clear Board"
-          className="glass-surface btn-hover-scale"
-          style={{
-            padding: 9,
-            borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#94a3b8',
-            cursor: 'pointer',
-          }}
-        >
-          <Trash2 style={{ width: 16, height: 16 }} />
-        </button>
       </div>
 
       {/* ----------------------------------------------------------- */}
@@ -1312,7 +1302,7 @@ export default function CanvasBoard() {
             </div>
 
             <div style={{ display: 'flex', gap: 6 }}>
-              {[8, 18, 32].map((spd) => (
+              {[10, 24, 48].map((spd) => (
                 <button
                   key={spd}
                   onClick={() => setRocketSpeed(spd)}
@@ -1329,19 +1319,29 @@ export default function CanvasBoard() {
                     cursor: 'pointer',
                   }}
                 >
-                  {spd === 8 ? 'Cruiser' : spd === 18 ? 'Sonic' : 'Warp'}
+                  {spd === 10 ? 'Cruiser' : spd === 24 ? 'Sonic' : 'Warp'}
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: 9, color: '#94a3b8', lineHeight: 1.2 }}>
-              Move cursor near screen edges to fly canvas!
+            <span style={{ fontSize: 9, color: '#fcd34d', lineHeight: 1.2 }}>
+              Click & hold anywhere to fly rocket infinitely!
             </span>
           </div>
         )}
 
         {/* Main Rocket Toggle Button */}
         <button
-          onClick={() => setIsRocketMode((prev) => !prev)}
+          onClick={() => {
+            setIsRocketMode((prev) => {
+              const next = !prev;
+              if (next) {
+                setActiveTool('pan');
+                setIsRadialOpen(false);
+                setActivePanel(null);
+              }
+              return next;
+            });
+          }}
           title={isRocketMode ? 'Disable Rocket Mode' : 'Enable Rocket Jet Speed Navigation'}
           className="btn-hover-scale interactive"
           style={{
