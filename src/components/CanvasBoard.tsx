@@ -204,6 +204,10 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   } | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
 
+  // Centerpiece Protected Sanctuary Emblem at Origin (0,0)
+  const centerLogoRef = useRef<HTMLImageElement | null>(null);
+  const [sanctuaryAlert, setSanctuaryAlert] = useState(false);
+
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordTimer, setRecordTimer] = useState(0);
@@ -301,6 +305,45 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
+
+    // ---------------------------------------------------------
+    // Centerpiece Sanctuary Emblem at Origin (0,0) (Protected)
+    // ---------------------------------------------------------
+    const SANCTUARY_RADIUS = 280;
+
+    ctx.save();
+    // 1. Dark circular base matching emblem background
+    ctx.beginPath();
+    ctx.arc(0, 0, SANCTUARY_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = '#080c14';
+    ctx.fill();
+
+    // 2. Neon cyan/indigo glowing border halo
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+    ctx.stroke();
+
+    // 3. Outer subtle dashed orbit ring
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, SANCTUARY_RADIUS + 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 4. Draw clipped emblem image inside the sanctuary circle
+    if (centerLogoRef.current && centerLogoRef.current.complete) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, SANCTUARY_RADIUS - 2, 0, Math.PI * 2);
+      ctx.clip();
+      const logoW = 500;
+      const logoH = 281;
+      ctx.drawImage(centerLogoRef.current, -logoW / 2, -logoH / 2, logoW, logoH);
+      ctx.restore();
+    }
+    ctx.restore();
 
     // Draw All Elements
     elementsRef.current.forEach((el) => {
@@ -573,6 +616,16 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Preload Origin Sanctuary Emblem Logo
+  useEffect(() => {
+    const img = new Image();
+    img.src = '/media/endlessync-full-logo.png';
+    img.onload = () => {
+      centerLogoRef.current = img;
+      renderCanvas();
+    };
+  }, [renderCanvas]);
+
   // -----------------------------------------------------------
   // Socket.io Real-Time Synchronization
   // -----------------------------------------------------------
@@ -761,9 +814,17 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     if (activePanel) setActivePanel(null);
     if (isTeleportOpen) setIsTeleportOpen(false);
 
+    const worldPoint = screenToWorld(e.clientX, e.clientY);
+    const SANCTUARY_RADIUS = 280;
+    const isInsideSanctuary = Math.hypot(worldPoint.x, worldPoint.y) <= SANCTUARY_RADIUS;
+
     // 0. If there is a pending media item, click anywhere to paste it!
     if (pendingPlacement) {
-      const worldPoint = screenToWorld(e.clientX, e.clientY);
+      if (isInsideSanctuary) {
+        setSanctuaryAlert(true);
+        setTimeout(() => setSanctuaryAlert(false), 3500);
+        return;
+      }
       let newElement: CanvasElement;
 
       if (pendingPlacement.type === 'text') {
@@ -816,7 +877,16 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       return;
     }
 
-    const worldPoint = screenToWorld(e.clientX, e.clientY);
+    // Prevent drawing or modifying inside the reserved center sanctuary
+    if (activeTool === 'pen' || activeTool === 'shape' || activeTool === 'fill' || activeTool === 'text') {
+      if (isInsideSanctuary) {
+        setSanctuaryAlert(true);
+        setTimeout(() => setSanctuaryAlert(false), 3500);
+        isInteracting.current = false;
+        return;
+      }
+    }
+
     startPoint.current = worldPoint;
     isInteracting.current = true;
 
@@ -869,6 +939,10 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
         y: prev.y + e.movementY,
       }));
     } else if (activeTool === 'pen') {
+      // Prevent drawing into the protected origin sanctuary
+      if (Math.hypot(worldPoint.x, worldPoint.y) <= 280) {
+        return;
+      }
       currentStroke.current.push(worldPoint);
 
       // Low-latency stroke rendering
@@ -966,6 +1040,17 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       socket.emit('element:add', newStroke);
       currentStroke.current = [];
     } else if (activeTool === 'shape') {
+      // Prevent committing shapes overlapping the protected origin sanctuary
+      if (
+        Math.hypot(startPoint.current.x, startPoint.current.y) <= 280 ||
+        Math.hypot(worldPoint.x, worldPoint.y) <= 280
+      ) {
+        setSanctuaryAlert(true);
+        setTimeout(() => setSanctuaryAlert(false), 3500);
+        renderCanvas();
+        return;
+      }
+
       const computedFill = hexToRgba(currentColor, fillOpacity);
       const newShape: CanvasElement = {
         id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -2390,7 +2475,51 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       )}
 
       {/* ----------------------------------------------------------- */}
-      {/* 9. PRIMARY INTERACTIVE HTML5 CANVAS                        */}
+      {/* 9. PROTECTED SANCTUARY ALERT TOAST                          */}
+      {/* ----------------------------------------------------------- */}
+      {sanctuaryAlert && (
+        <div
+          className="dock-top-center interactive"
+          style={{
+            position: 'fixed',
+            top: 76,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 90,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 20px',
+            borderRadius: 24,
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1px solid rgba(244, 63, 94, 0.7)',
+            boxShadow: '0 0 30px rgba(244, 63, 94, 0.4)',
+            color: '#fff',
+            fontSize: 12,
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          <ShieldCheck style={{ width: 18, height: 18, color: '#f43f5e' }} />
+          <span>
+            <strong style={{ color: '#fda4af' }}>Protected Origin Sanctuary (0, 0):</strong> The Endlessync centerpiece emblem is reserved and cannot be drawn on or edited.
+          </span>
+          <button
+            onClick={() => setSanctuaryAlert(false)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              marginLeft: 4,
+            }}
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* 10. PRIMARY INTERACTIVE HTML5 CANVAS                        */}
       {/* ----------------------------------------------------------- */}
       <canvas
         ref={canvasRef}

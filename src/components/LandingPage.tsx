@@ -48,12 +48,18 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       {/* Top Navbar */}
       <nav className="relative z-20 flex items-center justify-between px-6 sm:px-12 py-5 border-b border-slate-800/60 backdrop-blur-md bg-slate-900/30">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 border border-indigo-400/40">
-            <Layers className="w-6 h-6 text-white animate-pulse" />
+          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-lg shadow-cyan-500/20 p-1">
+            <img
+              src="/media/endlessync-symbol.png"
+              alt="Endlessync Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold tracking-tight text-white">Endlessync</span>
+              <span className="text-xl font-bold tracking-tight text-white flex items-center">
+                Endless<span className="text-cyan-400">ync</span>
+              </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
                 v2.0
               </span>

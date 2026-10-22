@@ -28,6 +28,13 @@ export const metadata: Metadata = {
     "WebSocket canvas"
   ],
   authors: [{ name: "Endlessync" }],
+  icons: {
+    icon: [
+      { url: '/icon.png' },
+      { url: '/favicon.png' },
+    ],
+    apple: '/icon.png',
+  },
   openGraph: {
     title: "Endlessync - Collaborative Infinite Canvas",
     description: "Connect and create in real-time on an endless digital canvas.",

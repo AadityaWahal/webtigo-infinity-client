@@ -76,11 +76,17 @@ export default function BlogGuide({
           )}
 
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 shadow-md shadow-indigo-500/20 border border-indigo-400/30">
-              <Layers className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-md shadow-cyan-500/20 p-1">
+              <img
+                src="/media/endlessync-symbol.png"
+                alt="Endlessync Emblem"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
-              <span className="text-base font-bold tracking-tight text-white">Endlessync</span>
+              <span className="text-base font-bold tracking-tight text-white flex items-center">
+                Endless<span className="text-cyan-400">ync</span>
+              </span>
               <span className="ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
                 Stories & Docs
               </span>
