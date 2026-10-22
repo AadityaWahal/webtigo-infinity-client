@@ -358,9 +358,8 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       ctx.beginPath();
       ctx.arc(0, 0, SANCTUARY_RADIUS - 2, 0, Math.PI * 2);
       ctx.clip();
-      const logoW = 500;
-      const logoH = 281;
-      ctx.drawImage(centerLogoRef.current, -logoW / 2, -logoH / 2, logoW, logoH);
+      const diameter = (SANCTUARY_RADIUS - 2) * 2;
+      ctx.drawImage(centerLogoRef.current, -diameter / 2, -diameter / 2, diameter, diameter);
       ctx.restore();
     }
     ctx.restore();
@@ -639,7 +638,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // Preload Origin Sanctuary Emblem Logo
   useEffect(() => {
     const img = new Image();
-    img.src = '/media/endlessync-full-logo.png';
+    img.src = '/media/cropped_circle_image.png';
     img.onload = () => {
       centerLogoRef.current = img;
       renderCanvas();
