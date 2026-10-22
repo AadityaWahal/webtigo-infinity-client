@@ -31,6 +31,7 @@ import {
   ArrowLeft,
   Volume2,
   FileText,
+  BookOpen,
 } from 'lucide-react';
 
 // -------------------------------------------------------------
@@ -109,9 +110,10 @@ function hexToRgba(hex: string, alpha: number): string {
 
 interface CanvasBoardProps {
   onBackToLanding?: () => void;
+  onOpenBlog?: () => void;
 }
 
-export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
+export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1168,6 +1170,29 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
           >
             <ArrowLeft style={{ width: 14, height: 14 }} />
             <span className="hidden sm:inline">Home</span>
+          </button>
+        )}
+
+        {/* Read Blog / Guide Button */}
+        {onOpenBlog && (
+          <button
+            onClick={onOpenBlog}
+            title="Read Founder Story & Guide"
+            className="glass-surface interactive-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              borderRadius: 14,
+              color: '#a855f7',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <BookOpen style={{ width: 14, height: 14 }} />
+            <span className="hidden sm:inline">Story & Guide</span>
           </button>
         )}
 
