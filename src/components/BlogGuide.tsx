@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Rocket,
   Layers,
@@ -28,7 +29,7 @@ import {
 
 interface BlogGuideProps {
   initialTab?: 'story' | 'guide';
-  onEnterCanvas: () => void;
+  onEnterCanvas?: () => void;
   onBackToHome?: () => void;
 }
 
@@ -37,8 +38,38 @@ export default function BlogGuide({
   onEnterCanvas,
   onBackToHome,
 }: BlogGuideProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'story' | 'guide'>(initialTab);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const handleEnterCanvas = () => {
+    if (onEnterCanvas) {
+      onEnterCanvas();
+    } else {
+      router.push('/canvas');
+    }
+  };
+
+  const handleBackToHome = () => {
+    if (onBackToHome) {
+      onBackToHome();
+    } else {
+      router.push('/');
+    }
+  };
+
+  const handleTabChange = (tab: 'story' | 'guide') => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/blog?tab=${tab}`);
+    }
+  };
 
   const handleShare = () => {
     if (typeof window !== 'undefined') {
@@ -65,15 +96,13 @@ export default function BlogGuide({
       {/* Top Navbar */}
       <nav className="sticky top-0 z-50 flex items-center justify-between px-6 sm:px-12 py-4 border-b border-slate-800/80 backdrop-blur-xl bg-slate-900/60">
         <div className="flex items-center gap-3">
-          {onBackToHome && (
-            <button
-              onClick={onBackToHome}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Home</span>
-            </button>
-          )}
+          <button
+            onClick={handleBackToHome}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Home</span>
+          </button>
 
           <div className="flex items-center gap-2.5">
             <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-md shadow-cyan-500/20 p-1">
@@ -98,7 +127,7 @@ export default function BlogGuide({
         <div className="flex items-center gap-3">
           <div className="flex p-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-semibold">
             <button
-              onClick={() => setActiveTab('story')}
+              onClick={() => handleTabChange('story')}
               className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                 activeTab === 'story'
                   ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-sm'
@@ -108,7 +137,7 @@ export default function BlogGuide({
               Founder's Story
             </button>
             <button
-              onClick={() => setActiveTab('guide')}
+              onClick={() => handleTabChange('guide')}
               className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
                 activeTab === 'guide'
                   ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-sm'
@@ -120,7 +149,7 @@ export default function BlogGuide({
           </div>
 
           <button
-            onClick={onEnterCanvas}
+            onClick={handleEnterCanvas}
             className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
           >
             <span>Launch Canvas</span>
@@ -595,7 +624,7 @@ export default function BlogGuide({
                   </p>
                 </div>
                 <button
-                  onClick={onEnterCanvas}
+                  onClick={handleEnterCanvas}
                   className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 text-white text-sm font-bold shadow-xl shadow-indigo-600/30 transition cursor-pointer flex items-center gap-2 shrink-0"
                 >
                   <Rocket className="w-4 h-4 text-amber-300" />

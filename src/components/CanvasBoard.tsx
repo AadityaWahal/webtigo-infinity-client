@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { socket } from '@/lib/socket';
 import {
   Pen,
@@ -32,6 +33,7 @@ import {
   Volume2,
   FileText,
   BookOpen,
+  ShieldCheck,
 } from 'lucide-react';
 
 // -------------------------------------------------------------
@@ -114,6 +116,24 @@ interface CanvasBoardProps {
 }
 
 export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoardProps) {
+  const router = useRouter();
+
+  const handleBackToLanding = () => {
+    if (onBackToLanding) {
+      onBackToLanding();
+    } else {
+      router.push('/');
+    }
+  };
+
+  const handleOpenBlog = (tab: 'story' | 'guide' = 'guide') => {
+    if (onOpenBlog) {
+      onOpenBlog(tab);
+    } else {
+      router.push(`/blog?tab=${tab}`);
+    }
+  };
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1236,50 +1256,46 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
         }}
       >
         {/* Back to Landing Button */}
-        {onBackToLanding && (
-          <button
-            onClick={onBackToLanding}
-            title="Return to Endlessync Overview"
-            className="glass-surface interactive-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 12px',
-              borderRadius: 14,
-              color: '#38bdf8',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <ArrowLeft style={{ width: 14, height: 14 }} />
-            <span className="hidden sm:inline">Home</span>
-          </button>
-        )}
+        <button
+          onClick={handleBackToLanding}
+          title="Return to Endlessync Overview"
+          className="glass-surface interactive-btn"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 12px',
+            borderRadius: 14,
+            color: '#38bdf8',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <ArrowLeft style={{ width: 14, height: 14 }} />
+          <span className="hidden sm:inline">Home</span>
+        </button>
 
         {/* Read Blog / Guide Button */}
-        {onOpenBlog && (
-          <button
-            onClick={() => onOpenBlog('guide')}
-            title="Read Founder Story & Guide"
-            className="glass-surface interactive-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 12px',
-              borderRadius: 14,
-              color: '#a855f7',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <BookOpen style={{ width: 14, height: 14 }} />
-            <span className="hidden sm:inline">Story & Guide</span>
-          </button>
-        )}
+        <button
+          onClick={() => handleOpenBlog('guide')}
+          title="Read Founder Story & Guide"
+          className="glass-surface interactive-btn"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 12px',
+            borderRadius: 14,
+            color: '#a855f7',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <BookOpen style={{ width: 14, height: 14 }} />
+          <span className="hidden sm:inline">Story & Guide</span>
+        </button>
 
         <div
           className="glass-surface"

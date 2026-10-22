@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Rocket,
   Layers,
@@ -24,11 +26,28 @@ import {
 } from 'lucide-react';
 
 interface LandingPageProps {
-  onEnterCanvas: () => void;
+  onEnterCanvas?: () => void;
   onOpenBlog?: (tab?: 'story' | 'guide') => void;
 }
 
 export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPageProps) {
+  const router = useRouter();
+
+  const handleEnterCanvas = () => {
+    if (onEnterCanvas) {
+      onEnterCanvas();
+    } else {
+      router.push('/canvas');
+    }
+  };
+
+  const handleOpenBlog = (tab: 'story' | 'guide' = 'story') => {
+    if (onOpenBlog) {
+      onOpenBlog(tab);
+    } else {
+      router.push(`/blog?tab=${tab}`);
+    }
+  };
   return (
     <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#07090e] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col">
       {/* Dynamic Ambient Glow Gradients */}
@@ -74,26 +93,24 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
             <span>24/7 Global Sync Active</span>
           </div>
 
-          {onOpenBlog && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onOpenBlog('story')}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
-              >
-                <span>Founder's Story</span>
-              </button>
-              <button
-                onClick={() => onOpenBlog('guide')}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
-              >
-                <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                <span>User Guide</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleOpenBlog('story')}
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
+            >
+              <span>Founder's Story</span>
+            </button>
+            <button
+              onClick={() => handleOpenBlog('guide')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>User Guide</span>
+            </button>
+          </div>
 
           <button
-            onClick={onEnterCanvas}
+            onClick={handleEnterCanvas}
             className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
           >
             <span>Launch Canvas</span>
@@ -128,7 +145,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
         {/* Central Prominent CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
-            onClick={onEnterCanvas}
+            onClick={handleEnterCanvas}
             className="group relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:shadow-[0_0_40px_rgba(99,102,241,0.6)] active:scale-95 text-white text-base font-bold shadow-2xl transition duration-300 cursor-pointer border border-indigo-400/40"
           >
             <Rocket className="w-5 h-5 text-amber-300 group-hover:rotate-12 transition-transform duration-300" />
@@ -137,15 +154,13 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
             <span className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-cyan-500 to-purple-600 opacity-20 group-hover:opacity-60 blur-lg transition duration-300 -z-10" />
           </button>
 
-          {onOpenBlog && (
-            <button
-              onClick={() => onOpenBlog('guide')}
-              className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white text-base font-semibold transition cursor-pointer backdrop-blur-xl"
-            >
-              <BookOpen className="w-4 h-4 text-cyan-400" />
-              <span>Explore User Guide</span>
-            </button>
-          )}
+          <button
+            onClick={() => handleOpenBlog('guide')}
+            className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white text-base font-semibold transition cursor-pointer backdrop-blur-xl"
+          >
+            <BookOpen className="w-4 h-4 text-cyan-400" />
+            <span>Explore User Guide</span>
+          </button>
         </div>
 
         {/* --------------------------------------------------------- */}
@@ -171,15 +186,13 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
               </p>
             </div>
 
-            {onOpenBlog && (
-              <button
-                onClick={() => onOpenBlog('story')}
-                className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-cyan-300 hover:text-white text-xs font-semibold transition cursor-pointer"
-              >
-                <span>Read Full Founder's Story</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={() => handleOpenBlog('story')}
+              className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-cyan-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+            >
+              <span>Read Full Founder's Story</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
@@ -300,7 +313,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
           </div>
 
           <button
-            onClick={onEnterCanvas}
+            onClick={handleEnterCanvas}
             className="shrink-0 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-2"
           >
             <span>Launch Workbench</span>
@@ -312,23 +325,21 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       {/* Footer */}
       <footer className="relative z-20 py-6 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-3">
         <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
-        {onOpenBlog && (
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => onOpenBlog('story')}
-              className="text-slate-400 hover:text-white transition cursor-pointer"
-            >
-              Founder's Story
-            </button>
-            <span className="text-slate-700">•</span>
-            <button
-              onClick={() => onOpenBlog('guide')}
-              className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
-            >
-              Official User Guide →
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => handleOpenBlog('story')}
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Founder's Story
+          </button>
+          <span className="text-slate-700">•</span>
+          <button
+            onClick={() => handleOpenBlog('guide')}
+            className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
+          >
+            Official User Guide →
+          </button>
+        </div>
       </footer>
     </div>
   );
