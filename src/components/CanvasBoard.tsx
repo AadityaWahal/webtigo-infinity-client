@@ -188,6 +188,20 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
   const [textInputVal, setTextInputVal] = useState('');
   const [pendingTextPos, setPendingTextPos] = useState<Point | null>(null);
 
+  // Pending Placement State (Click to paste text, photo, or audio note)
+  const [pendingPlacement, setPendingPlacement] = useState<{
+    type: 'text' | 'image' | 'audio';
+    text?: string;
+    fontSize?: number;
+    color?: string;
+    src?: string;
+    width?: number;
+    height?: number;
+    duration?: number;
+    title?: string;
+  } | null>(null);
+  const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
+
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordTimer, setRecordTimer] = useState(0);
@@ -543,6 +557,20 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
   }, []);
 
+  // Keyboard shortcut listener (ESC to cancel pending placement or modals)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPendingPlacement(null);
+        setActiveMediaModal(null);
+        setActivePanel(null);
+        setIsTeleportOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // -----------------------------------------------------------
   // Socket.io Real-Time Synchronization
   // -----------------------------------------------------------
@@ -731,6 +759,55 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
     if (activePanel) setActivePanel(null);
     if (isTeleportOpen) setIsTeleportOpen(false);
 
+    // 0. If there is a pending media item, click anywhere to paste it!
+    if (pendingPlacement) {
+      const worldPoint = screenToWorld(e.clientX, e.clientY);
+      let newElement: CanvasElement;
+
+      if (pendingPlacement.type === 'text') {
+        newElement = {
+          id: `text_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          type: 'text',
+          text: pendingPlacement.text || '',
+          x: worldPoint.x,
+          y: worldPoint.y,
+          color: pendingPlacement.color || currentColor,
+          fontSize: pendingPlacement.fontSize || 18,
+        };
+      } else if (pendingPlacement.type === 'image' && pendingPlacement.src) {
+        const w = pendingPlacement.width || 240;
+        const h = pendingPlacement.height || 180;
+        newElement = {
+          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          type: 'image',
+          src: pendingPlacement.src,
+          x: worldPoint.x - w / 2,
+          y: worldPoint.y - h / 2,
+          width: w,
+          height: h,
+        };
+      } else if (pendingPlacement.type === 'audio' && pendingPlacement.src) {
+        newElement = {
+          id: `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          type: 'audio',
+          src: pendingPlacement.src,
+          x: worldPoint.x - 90,
+          y: worldPoint.y - 24,
+          duration: pendingPlacement.duration || 0,
+          title: pendingPlacement.title || 'Voice Note',
+        };
+      } else {
+        setPendingPlacement(null);
+        return;
+      }
+
+      setElements((prev) => [...prev, newElement]);
+      socket.emit('element:add', newElement);
+      setPendingPlacement(null);
+      isInteracting.current = false;
+      return;
+    }
+
     if (isRocketMode) {
       isRocketClickActive.current = true;
       setIsThrusting(true);
@@ -776,6 +853,9 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     mouseScreenPos.current = { x: e.clientX, y: e.clientY };
+    if (pendingPlacement) {
+      setMousePos({ x: e.clientX, y: e.clientY });
+    }
     const worldPoint = screenToWorld(e.clientX, e.clientY);
     setCursorWorldPos(worldPoint);
 
@@ -924,30 +1004,25 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
   // Media Insertion Handlers (Text, Image, Audio)
   // -----------------------------------------------------------
 
-  // 1. Text Submission
+  // 1. Text Submission -> Prepare for Click-to-Paste
   const handleSaveTextNote = () => {
     if (!textInputVal.trim()) {
       setActiveMediaModal(null);
       return;
     }
-    const pos = pendingTextPos || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-    const newTextElement: CanvasElement = {
-      id: `text_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    setPendingPlacement({
       type: 'text',
       text: textInputVal.trim(),
-      x: pos.x,
-      y: pos.y,
       color: currentColor,
       fontSize: 18,
-    };
-    setElements((prev) => [...prev, newTextElement]);
-    socket.emit('element:add', newTextElement);
+    });
     setTextInputVal('');
     setActiveMediaModal(null);
+    setIsMediaHubOpen(false);
     setActiveTool('pan');
   };
 
-  // 2. Photo / Image Upload
+  // 2. Photo / Image Upload -> Prepare for Click-to-Paste
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -955,20 +1030,12 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      const centerWorld = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-
-      const newImageElement: CanvasElement = {
-        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      setPendingPlacement({
         type: 'image',
         src: dataUrl,
-        x: centerWorld.x - 120,
-        y: centerWorld.y - 90,
         width: 240,
         height: 180,
-      };
-
-      setElements((prev) => [...prev, newImageElement]);
-      socket.emit('element:add', newImageElement);
+      });
       setIsMediaHubOpen(false);
       setActiveTool('pan');
     };
@@ -976,7 +1043,7 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
     e.target.value = ''; // Reset input
   };
 
-  // 3. Audio Recording
+  // 3. Audio Recording -> Prepare for Click-to-Paste
   const startRecordingAudio = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -993,22 +1060,15 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64Audio = reader.result as string;
-          const centerWorld = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-
-          const newAudioElement: CanvasElement = {
-            id: `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          setPendingPlacement({
             type: 'audio',
             src: base64Audio,
-            x: centerWorld.x - 90,
-            y: centerWorld.y - 24,
             duration: recordTimer,
             title: `Voice Note (${recordTimer}s)`,
-          };
-
-          setElements((prev) => [...prev, newAudioElement]);
-          socket.emit('element:add', newAudioElement);
+          });
           setActiveMediaModal(null);
           setIsMediaHubOpen(false);
+          setActiveTool('pan');
         };
         reader.readAsDataURL(audioBlob);
 
@@ -1382,7 +1442,7 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
                 cursor: 'pointer',
               }}
             >
-              Pin to Canvas
+              Ready to Place (Click Canvas to Paste)
             </button>
           </div>
         )}
@@ -1432,7 +1492,7 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
                 </div>
               ) : (
                 <span style={{ fontSize: 11, color: '#cbd5e1' }}>
-                  Click below to record a voice note and pin it directly onto the canvas.
+                  Click below to record a voice note and then click to paste anywhere.
                 </span>
               )}
             </div>
@@ -1452,7 +1512,7 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
                   boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
                 }}
               >
-                Stop & Pin to Canvas
+                Stop & Ready to Place
               </button>
             ) : (
               <button
@@ -2195,7 +2255,117 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
       )}
 
       {/* ----------------------------------------------------------- */}
-      {/* 8. PRIMARY INTERACTIVE HTML5 CANVAS                        */}
+      {/* 8. PENDING PLACEMENT FLOATING PLUS STAMP & TOP BANNER       */}
+      {/* ----------------------------------------------------------- */}
+      {pendingPlacement && (
+        <>
+          {/* Top banner instructing user */}
+          <div
+            className="dock-top-center interactive"
+            style={{
+              position: 'fixed',
+              top: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 70,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 20px',
+              borderRadius: 30,
+              background: 'rgba(15, 23, 42, 0.92)',
+              border: '1px solid rgba(56, 189, 248, 0.5)',
+              boxShadow: '0 0 30px rgba(56, 189, 248, 0.35)',
+              color: '#fff',
+              fontSize: 12,
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  color: '#38bdf8',
+                  border: '1px solid #38bdf8',
+                }}
+              >
+                <Plus style={{ width: 15, height: 15 }} />
+              </div>
+              <span>
+                <strong>Click anywhere on canvas</strong> to paste your{' '}
+                <span style={{ color: '#38bdf8' }}>
+                  {pendingPlacement.type === 'text'
+                    ? 'Text Note'
+                    : pendingPlacement.type === 'image'
+                    ? 'Photo'
+                    : 'Voice Note'}
+                </span>
+              </span>
+            </div>
+            <button
+              onClick={() => setPendingPlacement(null)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                borderRadius: 12,
+                padding: '3px 10px',
+                fontSize: 11,
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                fontWeight: 500,
+              }}
+            >
+              Cancel (ESC)
+            </button>
+          </div>
+
+          {/* Floating Stamp following mouse position */}
+          <div
+            style={{
+              position: 'fixed',
+              pointerEvents: 'none',
+              zIndex: 9999,
+              left: `${mousePos.x || mouseScreenPos.current.x}px`,
+              top: `${mousePos.y || mouseScreenPos.current.y}px`,
+              transform: 'translate(14px, 14px)',
+            }}
+          >
+            <div
+              className="glass-surface"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 20,
+                border: '1px solid #38bdf8',
+                background: 'rgba(15, 23, 42, 0.95)',
+                boxShadow: '0 0 20px rgba(56, 189, 248, 0.5)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Plus style={{ width: 14, height: 14, color: '#38bdf8' }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#f8fafc' }}>
+                Click to paste{' '}
+                {pendingPlacement.type === 'text'
+                  ? 'Text Note'
+                  : pendingPlacement.type === 'image'
+                  ? 'Photo'
+                  : 'Voice Note'}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* 9. PRIMARY INTERACTIVE HTML5 CANVAS                        */}
       {/* ----------------------------------------------------------- */}
       <canvas
         ref={canvasRef}
@@ -2210,6 +2380,8 @@ export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
           touchAction: 'none',
           cursor: isRocketMode
             ? 'none'
+            : pendingPlacement
+            ? 'crosshair'
             : activeTool === 'pen'
             ? 'crosshair'
             : activeTool === 'eraser'
