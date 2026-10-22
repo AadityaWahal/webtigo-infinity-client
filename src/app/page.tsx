@@ -1,19 +1,27 @@
 'use client';
 
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
+import LandingPage from '@/components/LandingPage';
 
-// Next.js tries to server-side render everything by default.
-// Konva heavily relies on the `window` object which doesn't exist on the server.
-// We disable SSR for CanvasBoard entirely so it only loads on the client.
+// Disable SSR for CanvasBoard as it relies on browser window, canvas context, and audio APIs
 const DynamicCanvasBoard = dynamic(
   () => import('@/components/CanvasBoard'),
   { ssr: false }
 );
 
 export default function Home() {
+  const [currentView, setCurrentView] = useState<'landing' | 'canvas'>('landing');
+
   return (
-    <main className="w-screen h-screen overflow-hidden m-0 p-0">
-      <DynamicCanvasBoard />
+    <main className="w-screen h-screen overflow-hidden m-0 p-0 relative bg-[#07090e]">
+      {currentView === 'landing' ? (
+        <LandingPage onEnterCanvas={() => setCurrentView('canvas')} />
+      ) : (
+        <div className="w-full h-full animate-in fade-in zoom-in-95 duration-300">
+          <DynamicCanvasBoard onBackToLanding={() => setCurrentView('landing')} />
+        </div>
+      )}
     </main>
   );
 }

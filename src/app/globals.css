@@ -46,6 +46,18 @@ html, body {
   gap: 12px !important;
 }
 
+.dock-bottom-left {
+  position: fixed !important;
+  bottom: 24px !important;
+  left: 24px !important;
+  z-index: 50 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  pointer-events: none !important;
+}
+
 .dock-bottom-center {
   position: fixed !important;
   bottom: 24px !important;
@@ -94,6 +106,11 @@ html, body {
   box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.8), 0 0 24px rgba(99, 102, 241, 0.15) !important;
 }
 
+/* Ensures popover panel opens comfortably above the satellite crown */
+.satellite-popover-panel {
+  margin-bottom: 70px !important;
+}
+
 .interactive-btn {
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.2s ease !important;
 }
@@ -106,7 +123,6 @@ html, body {
 
 /* -------------------------------------------------------------
    Radial Simulator Hub (CSS-Variable Powered Transformation)
-   Avoids hover transform overrides by combining translation & scale cleanly!
    ------------------------------------------------------------- */
 
 .radial-container {
@@ -202,4 +218,45 @@ html, body {
   .satellite-closed {
     display: none !important;
   }
+}
+
+/* -------------------------------------------------------------
+   Bottom-Left Media Ingestion Hub (Text, Audio, Photo)
+   ------------------------------------------------------------- */
+
+.media-container {
+  position: relative !important;
+  width: 58px !important;
+  height: 58px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.media-satellite-btn {
+  --tx: 0px;
+  --ty: 0px;
+  --scale: 1;
+  position: absolute !important;
+  transform: translate(var(--tx), var(--ty)) scale(var(--scale)) !important;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.media-satellite-btn:hover {
+  --scale: 1.15 !important;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.6) !important;
+}
+
+.media-sat-1 { --tx: 0px;  --ty: -64px; }
+.media-sat-2 { --tx: 48px; --ty: -44px; }
+.media-sat-3 { --tx: 64px; --ty: 0px; }
+
+.media-sat-closed {
+  opacity: 0 !important;
+  --tx: 0px !important;
+  --ty: 0px !important;
+  --scale: 0.3 !important;
+  pointer-events: none !important;
 }

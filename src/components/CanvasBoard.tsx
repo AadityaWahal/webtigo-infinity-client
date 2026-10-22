@@ -21,12 +21,22 @@ import {
   WifiOff,
   Flame,
   Check,
+  Plus,
+  Type,
+  Image as ImageIcon,
+  Mic,
+  MicOff,
+  Play,
+  Pause,
+  ArrowLeft,
+  Volume2,
+  FileText,
 } from 'lucide-react';
 
 // -------------------------------------------------------------
 // Data Types
 // -------------------------------------------------------------
-type ActiveTool = 'pen' | 'eraser' | 'shape' | 'fill' | 'pan';
+type ActiveTool = 'pen' | 'eraser' | 'shape' | 'fill' | 'pan' | 'text' | 'image' | 'audio';
 type ShapeType = 'rect' | 'circle' | 'line' | 'arrow' | 'star';
 
 interface Point {
@@ -34,19 +44,29 @@ interface Point {
   y: number;
 }
 
-interface CanvasElement {
+export interface CanvasElement {
   id: string;
-  type: 'stroke' | 'shape' | 'fill';
+  type: 'stroke' | 'shape' | 'text' | 'image' | 'audio';
   points?: Point[];
   shapeType?: ShapeType;
   startX?: number;
   startY?: number;
   endX?: number;
   endY?: number;
-  color: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: string;
   fillColor?: string;
-  strokeWidth: number;
+  strokeWidth?: number;
   isFilled?: boolean;
+  fillOpacity?: number;
+  text?: string;
+  fontSize?: number;
+  src?: string; // Image or Audio data URL
+  title?: string;
+  duration?: number;
 }
 
 const PRESET_COLORS = [
@@ -69,8 +89,31 @@ const PRESET_SIZES = [
   { label: 'Marker', value: 28 },
 ];
 
-export default function CanvasBoard() {
+const PRESET_ERASER_SIZES = [
+  { label: 'Fine', value: 12 },
+  { label: 'Medium', value: 24 },
+  { label: 'Large', value: 48 },
+  { label: 'Huge', value: 80 },
+];
+
+// Helper to convert Hex to RGBA
+function hexToRgba(hex: string, alpha: number): string {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+  const num = parseInt(c, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+interface CanvasBoardProps {
+  onBackToLanding?: () => void;
+}
+
+export default function CanvasBoard({ onBackToLanding }: CanvasBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   // -----------------------------------------------------------
   // Viewport Pan & Zoom State
@@ -89,18 +132,27 @@ export default function CanvasBoard() {
   }, [zoom]);
 
   // -----------------------------------------------------------
-  // Canvas Elements & Tools State
+  // Canvas Elements State & In-Memory Image Cache
   // -----------------------------------------------------------
   const [elements, setElements] = useState<CanvasElement[]>([]);
   const elementsRef = useRef<CanvasElement[]>([]);
   elementsRef.current = elements;
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
+  // -----------------------------------------------------------
+  // Tool & Styling State
+  // -----------------------------------------------------------
   const [activeTool, setActiveTool] = useState<ActiveTool>('pan');
   const [currentColor, setCurrentColor] = useState<string>('#38bdf8');
   const [strokeWidth, setStrokeWidth] = useState<number>(4);
   const [selectedShape, setSelectedShape] = useState<ShapeType>('rect');
-  const [isFillActive, setIsFillActive] = useState<boolean>(false);
-  const [fillColor, setFillColor] = useState<string>('rgba(56, 189, 248, 0.25)');
+
+  // Fill Bucket with Opacity Control (Requirement from Audio 1)
+  const [isFillActive, setIsFillActive] = useState<boolean>(true);
+  const [fillOpacity, setFillOpacity] = useState<number>(0.85); // 0.1 to 1.0
+
+  // Eraser with Paint-like cursor scale (Requirement from Audio 1)
+  const [eraserRadius, setEraserRadius] = useState<number>(24);
 
   // Interaction tracking
   const isInteracting = useRef(false);
@@ -115,7 +167,7 @@ export default function CanvasBoard() {
   const [pingLatency, setPingLatency] = useState<number | null>(null);
 
   // -----------------------------------------------------------
-  // Top-Left Coordinates & Teleport State
+  // Coordinates HUD & Teleport (Top-Left)
   // -----------------------------------------------------------
   const [cursorWorldPos, setCursorWorldPos] = useState<Point>({ x: 0, y: 0 });
   const [isTeleportOpen, setIsTeleportOpen] = useState(false);
@@ -129,12 +181,30 @@ export default function CanvasBoard() {
   const [activePanel, setActivePanel] = useState<'size' | 'color' | 'shape' | 'fill' | 'eraser' | null>(null);
 
   // -----------------------------------------------------------
-  // Bottom-Right Rocket Jet Mode State
+  // Bottom-Left Media Ingestion Hub State (Text, Audio, Photo)
+  // -----------------------------------------------------------
+  const [isMediaHubOpen, setIsMediaHubOpen] = useState(false);
+  const [activeMediaModal, setActiveMediaModal] = useState<'text' | 'audio' | null>(null);
+  const [textInputVal, setTextInputVal] = useState('');
+  const [pendingTextPos, setPendingTextPos] = useState<Point | null>(null);
+
+  // Audio Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordTimer, setRecordTimer] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  // -----------------------------------------------------------
+  // Bottom-Right Rocket Jet Mode State (Infinite Click-to-Fly)
   // -----------------------------------------------------------
   const [isRocketMode, setIsRocketMode] = useState(false);
-  const [rocketSpeed, setRocketSpeed] = useState<number>(18);
+  const [rocketSpeed, setRocketSpeed] = useState<number>(24);
   const [rocketAngle, setRocketAngle] = useState<number>(0);
   const [isThrusting, setIsThrusting] = useState(false);
+  const isRocketClickActive = useRef(false);
   const mouseScreenPos = useRef<Point>({ x: 0, y: 0 });
   const animationFrameId = useRef<number | null>(null);
 
@@ -169,7 +239,7 @@ export default function CanvasBoard() {
   }, []);
 
   // -----------------------------------------------------------
-  // Canvas Renderer
+  // Canvas Rendering Engine (Infinite Math + Media Rendering)
   // -----------------------------------------------------------
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -180,11 +250,11 @@ export default function CanvasBoard() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Dark Obsidian Canvas Background
+    // Dark Obsidian Cosmic Background
     ctx.fillStyle = '#07090e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Infinite Dot Matrix Grid (Flawless modulo for infinite negative/positive coords)
+    // Infinite Dot Matrix Grid with continuous modulo
     const gridSize = 36 * zoom;
     const offsetX = ((panOffset.x % gridSize) + gridSize) % gridSize;
     const offsetY = ((panOffset.y % gridSize) + gridSize) % gridSize;
@@ -216,15 +286,16 @@ export default function CanvasBoard() {
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // Draw Elements
+    // Draw All Elements
     elementsRef.current.forEach((el) => {
       ctx.save();
-      ctx.strokeStyle = el.color;
-      ctx.fillStyle = el.fillColor || el.color;
-      ctx.lineWidth = el.strokeWidth;
+      ctx.strokeStyle = el.color || '#38bdf8';
+      ctx.fillStyle = el.fillColor || el.color || '#38bdf8';
+      ctx.lineWidth = el.strokeWidth || 4;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
+      // 1. Freehand Stroke
       if (el.type === 'stroke' && el.points && el.points.length > 0) {
         ctx.beginPath();
         ctx.moveTo(el.points[0].x, el.points[0].y);
@@ -232,7 +303,9 @@ export default function CanvasBoard() {
           ctx.lineTo(el.points[i].x, el.points[i].y);
         }
         ctx.stroke();
-      } else if (
+      }
+      // 2. Vector Shapes
+      else if (
         el.type === 'shape' &&
         el.startX !== undefined &&
         el.startY !== undefined &&
@@ -302,11 +375,94 @@ export default function CanvasBoard() {
           ctx.stroke();
         }
       }
+      // 3. Image Photo Pin
+      else if (el.type === 'image' && el.src && el.x !== undefined && el.y !== undefined) {
+        let img = imageCache.current.get(el.src);
+        if (!img) {
+          img = new Image();
+          img.src = el.src;
+          img.onload = () => renderCanvas();
+          imageCache.current.set(el.src, img);
+        }
+        if (img.complete) {
+          const w = el.width || 240;
+          const h = el.height || 180;
+          ctx.drawImage(img, el.x, el.y, w, h);
+          // Sleek neon border around photo
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(el.x, el.y, w, h);
+        }
+      }
+      // 4. Text Card Pin
+      else if (el.type === 'text' && el.text && el.x !== undefined && el.y !== undefined) {
+        const fontSize = el.fontSize || 18;
+        ctx.font = `600 ${fontSize}px -apple-system, sans-serif`;
+        const textMetrics = ctx.measureText(el.text);
+        const pad = 10;
+        const boxW = textMetrics.width + pad * 2;
+        const boxH = fontSize + pad * 2;
+
+        // Glass card background for text
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = el.color || '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(el.x, el.y, boxW, boxH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = el.color || '#ffffff';
+        ctx.fillText(el.text, el.x + pad, el.y + pad + fontSize * 0.8);
+      }
+      // 5. Audio Note Pin
+      else if (el.type === 'audio' && el.x !== undefined && el.y !== undefined) {
+        const w = 180;
+        const h = 48;
+        const isPlaying = playingAudioId === el.id;
+
+        ctx.fillStyle = isPlaying ? 'rgba(79, 70, 229, 0.85)' : 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = isPlaying ? '#38bdf8' : 'rgba(99, 102, 241, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(el.x, el.y, w, h, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        // Icon circle
+        ctx.fillStyle = isPlaying ? '#38bdf8' : '#6366f1';
+        ctx.beginPath();
+        ctx.arc(el.x + 24, el.y + 24, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Play/Pause Symbol
+        ctx.fillStyle = '#ffffff';
+        if (isPlaying) {
+          ctx.fillRect(el.x + 19, el.y + 18, 3, 12);
+          ctx.fillRect(el.x + 26, el.y + 18, 3, 12);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(el.x + 21, el.y + 18);
+          ctx.lineTo(el.x + 30, el.y + 24);
+          ctx.lineTo(el.x + 21, el.y + 30);
+          ctx.fill();
+        }
+
+        // Title and duration
+        ctx.font = '600 12px -apple-system, sans-serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(el.title || 'Voice Note', el.x + 46, el.y + 22);
+
+        ctx.font = '500 10px monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(isPlaying ? 'Playing...' : `${el.duration || 5}s • Click to Play`, el.x + 46, el.y + 36);
+      }
+
       ctx.restore();
     });
 
     ctx.restore();
-  }, [panOffset, zoom, worldToScreen]);
+  }, [panOffset, zoom, worldToScreen, playingAudioId]);
 
   // Resize handler
   useEffect(() => {
@@ -326,10 +482,8 @@ export default function CanvasBoard() {
   }, [elements, panOffset, zoom, renderCanvas]);
 
   // -----------------------------------------------------------
-  // Rocket Mode 2D Physics Loop (Click-to-Fly Infinite Propulsion)
+  // Rocket Mode Infinite Click-to-Fly Propulsion Loop
   // -----------------------------------------------------------
-  const isRocketClickActive = useRef(false);
-
   useEffect(() => {
     if (!isRocketMode) {
       setIsThrusting(false);
@@ -349,19 +503,17 @@ export default function CanvasBoard() {
       const dirY = mouseY - centerY;
       const dist = Math.hypot(dirX, dirY);
 
-      // Rocket smoothly faces the cursor direction relative to screen center
       if (dist > 5) {
         const angleDeg = (Math.atan2(dirY, dirX) * 180) / Math.PI + 90;
         setRocketAngle(angleDeg);
       }
 
-      // Movement ONLY occurs when user clicks and holds down in rocket mode
+      // Continuous infinite propulsion when mouse is held down
       if (isRocketClickActive.current && dist > 10) {
         setIsThrusting(true);
         const normX = dirX / dist;
         const normY = dirY / dist;
 
-        // Smooth infinite camera velocity in rocket heading
         setPanOffset((prev) => ({
           x: prev.x - normX * rocketSpeed,
           y: prev.y - normY * rocketSpeed,
@@ -451,10 +603,131 @@ export default function CanvasBoard() {
   }, []);
 
   // -----------------------------------------------------------
+  // Audio Player Helper
+  // -----------------------------------------------------------
+  const playAudioNote = (audioElement: CanvasElement) => {
+    if (!audioElement.src) return;
+
+    if (playingAudioId === audioElement.id) {
+      if (activeAudioElementRef.current) {
+        activeAudioElementRef.current.pause();
+        activeAudioElementRef.current = null;
+      }
+      setPlayingAudioId(null);
+      return;
+    }
+
+    if (activeAudioElementRef.current) {
+      activeAudioElementRef.current.pause();
+    }
+
+    const audio = new Audio(audioElement.src);
+    activeAudioElementRef.current = audio;
+    setPlayingAudioId(audioElement.id);
+
+    audio.onended = () => {
+      setPlayingAudioId(null);
+      activeAudioElementRef.current = null;
+    };
+    audio.play().catch(() => setPlayingAudioId(null));
+  };
+
+  // -----------------------------------------------------------
+  // Precision Paint-Like Eraser (Segment Trimming & Carving)
+  // -----------------------------------------------------------
+  const eraseAtPoint = (point: Point) => {
+    const radius = eraserRadius / zoom;
+    let anyErased = false;
+
+    setElements((prev) => {
+      const next: CanvasElement[] = [];
+
+      prev.forEach((el) => {
+        // Freehand stroke carving: removes touched points and splits stroke smoothly
+        if (el.type === 'stroke' && el.points) {
+          const remainingSegments: Point[][] = [];
+          let currentSeg: Point[] = [];
+
+          el.points.forEach((p) => {
+            if (Math.hypot(p.x - point.x, p.y - point.y) > radius) {
+              currentSeg.push(p);
+            } else {
+              anyErased = true;
+              if (currentSeg.length > 1) {
+                remainingSegments.push(currentSeg);
+              }
+              currentSeg = [];
+            }
+          });
+          if (currentSeg.length > 1) {
+            remainingSegments.push(currentSeg);
+          }
+
+          if (remainingSegments.length > 0) {
+            remainingSegments.forEach((seg, idx) => {
+              next.push({
+                ...el,
+                id: idx === 0 ? el.id : `${el.id}_${idx}`,
+                points: seg,
+              });
+            });
+          } else {
+            socket.emit('element:erase', el.id);
+          }
+        }
+        // Shapes: delete if touched near boundaries/center
+        else if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
+          const midX = (el.startX + (el.endX || el.startX)) / 2;
+          const midY = (el.startY + (el.endY || el.startY)) / 2;
+          if (Math.hypot(midX - point.x, midY - point.y) < radius * 1.6) {
+            anyErased = true;
+            socket.emit('element:erase', el.id);
+          } else {
+            next.push(el);
+          }
+        }
+        // Text, Photo, or Audio
+        else if (
+          (el.type === 'text' || el.type === 'image' || el.type === 'audio') &&
+          el.x !== undefined &&
+          el.y !== undefined
+        ) {
+          if (Math.hypot(el.x - point.x, el.y - point.y) < radius * 1.6) {
+            anyErased = true;
+            socket.emit('element:erase', el.id);
+          } else {
+            next.push(el);
+          }
+        } else {
+          next.push(el);
+        }
+      });
+
+      return next;
+    });
+  };
+
+  const findElementNearPoint = (point: Point): CanvasElement | null => {
+    return (
+      elementsRef.current.find((el) => {
+        if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
+          const minX = Math.min(el.startX, el.endX || el.startX);
+          const maxX = Math.max(el.startX, el.endX || el.startX);
+          const minY = Math.min(el.startY, el.endY || el.startY);
+          const maxY = Math.max(el.startY, el.endY || el.startY);
+          return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+        } else if (el.type === 'audio' && el.x !== undefined && el.y !== undefined) {
+          return point.x >= el.x && point.x <= el.x + 180 && point.y >= el.y && point.y <= el.y + 48;
+        }
+        return false;
+      }) || null
+    );
+  };
+
+  // -----------------------------------------------------------
   // Pointer Events & Drawing Handlers
   // -----------------------------------------------------------
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // Dismiss open popup panels when interacting with the canvas
     if (activePanel) setActivePanel(null);
     if (isTeleportOpen) setIsTeleportOpen(false);
 
@@ -464,21 +737,40 @@ export default function CanvasBoard() {
       return;
     }
 
-    isInteracting.current = true;
     const worldPoint = screenToWorld(e.clientX, e.clientY);
     startPoint.current = worldPoint;
+    isInteracting.current = true;
+
+    // Check if clicked an audio note pin
+    const clickedElement = findElementNearPoint(worldPoint);
+    if (clickedElement && clickedElement.type === 'audio') {
+      playAudioNote(clickedElement);
+      isInteracting.current = false;
+      return;
+    }
 
     if (activeTool === 'pen') {
       currentStroke.current = [worldPoint];
     } else if (activeTool === 'eraser') {
       eraseAtPoint(worldPoint);
     } else if (activeTool === 'fill') {
-      const clicked = findElementNearPoint(worldPoint);
-      if (clicked && clicked.type === 'shape') {
-        const updated: CanvasElement = { ...clicked, isFilled: true, fillColor };
-        setElements((prev) => prev.map((el) => (el.id === clicked.id ? updated : el)));
+      // Bucket Fill Tool: fill clicked shape with chosen color and opacity
+      if (clickedElement && clickedElement.type === 'shape') {
+        const computedFill = hexToRgba(currentColor, fillOpacity);
+        const updated: CanvasElement = {
+          ...clickedElement,
+          isFilled: true,
+          fillColor: computedFill,
+          fillOpacity: fillOpacity,
+        };
+        setElements((prev) => prev.map((el) => (el.id === clickedElement.id ? updated : el)));
         socket.emit('element:add', updated);
       }
+    } else if (activeTool === 'text') {
+      // Set text placement coordinate
+      setPendingTextPos(worldPoint);
+      setActiveMediaModal('text');
+      isInteracting.current = false;
     }
   };
 
@@ -497,7 +789,7 @@ export default function CanvasBoard() {
     } else if (activeTool === 'pen') {
       currentStroke.current.push(worldPoint);
 
-      // Fast immediate stroke preview
+      // Low-latency stroke rendering
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -532,7 +824,7 @@ export default function CanvasBoard() {
           ctx.translate(panOffset.x, panOffset.y);
           ctx.scale(zoom, zoom);
           ctx.strokeStyle = currentColor;
-          ctx.fillStyle = isFillActive ? fillColor : 'transparent';
+          ctx.fillStyle = isFillActive ? hexToRgba(currentColor, fillOpacity) : 'transparent';
           ctx.lineWidth = strokeWidth;
           ctx.setLineDash([4, 4]);
 
@@ -592,6 +884,7 @@ export default function CanvasBoard() {
       socket.emit('element:add', newStroke);
       currentStroke.current = [];
     } else if (activeTool === 'shape') {
+      const computedFill = hexToRgba(currentColor, fillOpacity);
       const newShape: CanvasElement = {
         id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         type: 'shape',
@@ -601,7 +894,8 @@ export default function CanvasBoard() {
         endX: worldPoint.x,
         endY: worldPoint.y,
         color: currentColor,
-        fillColor: isFillActive ? fillColor : undefined,
+        fillColor: isFillActive ? computedFill : undefined,
+        fillOpacity: fillOpacity,
         strokeWidth: strokeWidth,
         isFilled: isFillActive,
       };
@@ -626,42 +920,124 @@ export default function CanvasBoard() {
     setPanOffset({ x: newPanX, y: newPanY });
   };
 
-  const eraseAtPoint = (point: Point) => {
-    const radius = 24 / zoom;
-    const target = elementsRef.current.find((el) => {
-      if (el.type === 'stroke' && el.points) {
-        return el.points.some((p) => Math.hypot(p.x - point.x, p.y - point.y) < radius);
-      } else if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
-        const midX = (el.startX + (el.endX || el.startX)) / 2;
-        const midY = (el.startY + (el.endY || el.startY)) / 2;
-        return Math.hypot(midX - point.x, midY - point.y) < radius * 2;
-      }
-      return false;
-    });
+  // -----------------------------------------------------------
+  // Media Insertion Handlers (Text, Image, Audio)
+  // -----------------------------------------------------------
 
-    if (target) {
-      setElements((prev) => prev.filter((el) => el.id !== target.id));
-      socket.emit('element:erase', target.id);
+  // 1. Text Submission
+  const handleSaveTextNote = () => {
+    if (!textInputVal.trim()) {
+      setActiveMediaModal(null);
+      return;
+    }
+    const pos = pendingTextPos || screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const newTextElement: CanvasElement = {
+      id: `text_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type: 'text',
+      text: textInputVal.trim(),
+      x: pos.x,
+      y: pos.y,
+      color: currentColor,
+      fontSize: 18,
+    };
+    setElements((prev) => [...prev, newTextElement]);
+    socket.emit('element:add', newTextElement);
+    setTextInputVal('');
+    setActiveMediaModal(null);
+    setActiveTool('pan');
+  };
+
+  // 2. Photo / Image Upload
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const centerWorld = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+
+      const newImageElement: CanvasElement = {
+        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        type: 'image',
+        src: dataUrl,
+        x: centerWorld.x - 120,
+        y: centerWorld.y - 90,
+        width: 240,
+        height: 180,
+      };
+
+      setElements((prev) => [...prev, newImageElement]);
+      socket.emit('element:add', newImageElement);
+      setIsMediaHubOpen(false);
+      setActiveTool('pan');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input
+  };
+
+  // 3. Audio Recording
+  const startRecordingAudio = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          const centerWorld = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+
+          const newAudioElement: CanvasElement = {
+            id: `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            type: 'audio',
+            src: base64Audio,
+            x: centerWorld.x - 90,
+            y: centerWorld.y - 24,
+            duration: recordTimer,
+            title: `Voice Note (${recordTimer}s)`,
+          };
+
+          setElements((prev) => [...prev, newAudioElement]);
+          socket.emit('element:add', newAudioElement);
+          setActiveMediaModal(null);
+          setIsMediaHubOpen(false);
+        };
+        reader.readAsDataURL(audioBlob);
+
+        // Stop media tracks
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordTimer(0);
+      recordIntervalRef.current = setInterval(() => {
+        setRecordTimer((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      alert('Microphone access is required to pin voice notes.');
     }
   };
 
-  const findElementNearPoint = (point: Point): CanvasElement | null => {
-    return (
-      elementsRef.current.find((el) => {
-        if (el.type === 'shape' && el.startX !== undefined && el.startY !== undefined) {
-          const minX = Math.min(el.startX, el.endX || el.startX);
-          const maxX = Math.max(el.startX, el.endX || el.startX);
-          const minY = Math.min(el.startY, el.endY || el.startY);
-          const maxY = Math.max(el.startY, el.endY || el.startY);
-          return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
-        }
-        return false;
-      }) || null
-    );
+  const stopRecordingAudio = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+    }
   };
 
-  // Main Pen button click:
-  // "when clicked on pen icon, the first default one automatically select, no need to click on the 5 icons before that"
+  // -----------------------------------------------------------
+  // Central Hub Activation Handler
+  // -----------------------------------------------------------
   const handleMainPenClick = () => {
     if (activeTool === 'pen') {
       setActiveTool('pan');
@@ -688,8 +1064,17 @@ export default function CanvasBoard() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: '#07090e' }}>
+      {/* Hidden file input for Photo Upload */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageFileChange}
+        style={{ display: 'none' }}
+      />
+
       {/* ----------------------------------------------------------- */}
-      {/* 1. TOP-LEFT HUD: Fixed Coordinates + Teleport Box           */}
+      {/* 1. TOP-LEFT HUD: Back to Home + Live Coordinates + Teleport */}
       {/* ----------------------------------------------------------- */}
       <div
         className="dock-top-left interactive"
@@ -703,6 +1088,29 @@ export default function CanvasBoard() {
           gap: 10,
         }}
       >
+        {/* Back to Landing Button */}
+        {onBackToLanding && (
+          <button
+            onClick={onBackToLanding}
+            title="Return to Endlessync Overview"
+            className="glass-surface interactive-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              borderRadius: 14,
+              color: '#38bdf8',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <ArrowLeft style={{ width: 14, height: 14 }} />
+            <span className="hidden sm:inline">Home</span>
+          </button>
+        )}
+
         <div
           className="glass-surface"
           style={{
@@ -733,7 +1141,7 @@ export default function CanvasBoard() {
               setIsTeleportOpen((prev) => !prev);
             }}
             title="Edit coordinates & teleport"
-            className="btn-hover-scale"
+            className="interactive-btn"
             style={{
               padding: '4px 10px',
               borderRadius: 8,
@@ -766,7 +1174,7 @@ export default function CanvasBoard() {
               zIndex: 60,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Compass style={{ width: 15, height: 15, color: '#38bdf8' }} /> Teleport Viewport
               </span>
@@ -860,7 +1268,7 @@ export default function CanvasBoard() {
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 2. TOP-RIGHT HUD: Connection State + Clean Canvas Action    */}
+      {/* 2. TOP-RIGHT HUD: Real-Time Connection & Peer Counter       */}
       {/* ----------------------------------------------------------- */}
       <div
         className="dock-top-right interactive"
@@ -871,7 +1279,7 @@ export default function CanvasBoard() {
           zIndex: 50,
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
+          gap: 10,
         }}
       >
         <div
@@ -902,7 +1310,266 @@ export default function CanvasBoard() {
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 3. MIDDLE-BOTTOM: Simulator Hub (Big Center + 5 Satellites)  */}
+      {/* 3. BOTTOM-LEFT: Media Hub (Text, Audio, Photo Ingestion)   */}
+      {/* ----------------------------------------------------------- */}
+      <div
+        className="dock-bottom-left"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: 12,
+          pointerEvents: 'none',
+        }}
+      >
+        {/* Inline Text Creation Modal */}
+        {activeMediaModal === 'text' && (
+          <div
+            className="glass-popover interactive"
+            style={{
+              marginBottom: 12,
+              padding: 16,
+              borderRadius: 18,
+              width: 280,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Type style={{ width: 14, height: 14, color: '#38bdf8' }} /> Pin Text Card
+              </span>
+              <button
+                onClick={() => setActiveMediaModal(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+            <textarea
+              autoFocus
+              rows={3}
+              placeholder="Type your message, note, or brainstorm idea..."
+              value={textInputVal}
+              onChange={(e) => setTextInputVal(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: '#111827',
+                border: '1px solid #374151',
+                color: '#fff',
+                fontSize: 12,
+                outline: 'none',
+                resize: 'none',
+              }}
+            />
+            <button
+              onClick={handleSaveTextNote}
+              style={{
+                padding: '8px 0',
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
+                border: 'none',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Pin to Canvas
+            </button>
+          </div>
+        )}
+
+        {/* Audio Recording Modal */}
+        {activeMediaModal === 'audio' && (
+          <div
+            className="glass-popover interactive"
+            style={{
+              marginBottom: 12,
+              padding: 16,
+              borderRadius: 18,
+              width: 280,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Mic style={{ width: 14, height: 14, color: '#f43f5e' }} /> Record Voice Note
+              </span>
+              <button
+                onClick={() => {
+                  stopRecordingAudio();
+                  setActiveMediaModal(null);
+                }}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              {isRecording ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div className="flex items-center gap-1.5 h-6">
+                    <span className="w-1.5 h-4 bg-rose-500 animate-pulse rounded-full" />
+                    <span className="w-1.5 h-6 bg-rose-400 animate-pulse rounded-full" />
+                    <span className="w-1.5 h-3 bg-rose-500 animate-pulse rounded-full" />
+                    <span className="w-1.5 h-5 bg-rose-400 animate-pulse rounded-full" />
+                  </div>
+                  <span style={{ fontFamily: 'monospace', fontSize: 18, color: '#f43f5e', fontWeight: 'bold' }}>
+                    00:{recordTimer < 10 ? `0${recordTimer}` : recordTimer}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>Recording live audio...</span>
+                </div>
+              ) : (
+                <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                  Click below to record a voice note and pin it directly onto the canvas.
+                </span>
+              )}
+            </div>
+
+            {isRecording ? (
+              <button
+                onClick={stopRecordingAudio}
+                style={{
+                  padding: '9px 0',
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #ef4444, #be123c)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
+                }}
+              >
+                Stop & Pin to Canvas
+              </button>
+            ) : (
+              <button
+                onClick={startRecordingAudio}
+                style={{
+                  padding: '9px 0',
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Start Recording
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Media Hub Trigger & Satellites */}
+        <div className="media-container interactive">
+          {/* Satellite 1: Text */}
+          <button
+            onClick={() => {
+              setActiveTool('text');
+              setActiveMediaModal('text');
+            }}
+            title="Attach Text Note"
+            className={`media-satellite-btn media-sat-1 glass-surface ${!isMediaHubOpen ? 'media-sat-closed' : ''}`}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#38bdf8',
+            }}
+          >
+            <Type style={{ width: 17, height: 17 }} />
+          </button>
+
+          {/* Satellite 2: Voice Note */}
+          <button
+            onClick={() => setActiveMediaModal('audio')}
+            title="Record Voice Note"
+            className={`media-satellite-btn media-sat-2 glass-surface ${!isMediaHubOpen ? 'media-sat-closed' : ''}`}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f43f5e',
+            }}
+          >
+            <Mic style={{ width: 17, height: 17 }} />
+          </button>
+
+          {/* Satellite 3: Photo Upload */}
+          <button
+            onClick={() => imageInputRef.current?.click()}
+            title="Drop Image Photo"
+            className={`media-satellite-btn media-sat-3 glass-surface ${!isMediaHubOpen ? 'media-sat-closed' : ''}`}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+            }}
+          >
+            <ImageIcon style={{ width: 17, height: 17 }} />
+          </button>
+
+          {/* Main Media Hub Plus Button */}
+          <button
+            onClick={() => setIsMediaHubOpen(!isMediaHubOpen)}
+            title="Attach Media (Text, Voice, Photos)"
+            className="interactive-btn"
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              width: 54,
+              height: 54,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: isMediaHubOpen ? '2px solid #818cf8' : '2px solid rgba(255,255,255,0.18)',
+              background: isMediaHubOpen
+                ? 'linear-gradient(135deg, #6366f1, #a855f7)'
+                : 'rgba(15, 23, 42, 0.9)',
+              color: '#fff',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+            }}
+          >
+            <Plus
+              style={{
+                width: 22,
+                height: 22,
+                transform: isMediaHubOpen ? 'rotate(45deg)' : 'none',
+                transition: 'transform 0.25s ease',
+              }}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* ----------------------------------------------------------- */}
+      {/* 4. MIDDLE-BOTTOM: Simulator Hub with Raised Popover Margin  */}
       {/* ----------------------------------------------------------- */}
       <div
         className="dock-bottom-center"
@@ -918,12 +1585,12 @@ export default function CanvasBoard() {
           pointerEvents: 'none',
         }}
       >
-        {/* Floating Rectangular Popover (Opens directly above hub) */}
+        {/* Raised Popover Panel - Placed well above the satellite crown */}
         {activePanel && (
           <div
-            className="glass-popover interactive"
+            className="glass-popover interactive satellite-popover-panel"
             style={{
-              marginBottom: 16,
+              marginBottom: 84, // Clean vertical clearance so it NEVER overlaps satellite icons!
               padding: 16,
               borderRadius: 20,
               minWidth: 280,
@@ -1001,11 +1668,8 @@ export default function CanvasBoard() {
                   {PRESET_COLORS.map((col) => (
                     <button
                       key={col}
-                      onClick={() => {
-                        setCurrentColor(col);
-                        if (isFillActive) setFillColor(col);
-                      }}
-                      className="btn-hover-scale"
+                      onClick={() => setCurrentColor(col)}
+                      className="interactive-btn"
                       style={{
                         width: 34,
                         height: 34,
@@ -1028,10 +1692,7 @@ export default function CanvasBoard() {
                   <input
                     type="color"
                     value={currentColor}
-                    onChange={(e) => {
-                      setCurrentColor(e.target.value);
-                      if (isFillActive) setFillColor(e.target.value);
-                    }}
+                    onChange={(e) => setCurrentColor(e.target.value)}
                     style={{ width: 32, height: 32, background: 'transparent', border: 'none', cursor: 'pointer' }}
                   />
                   <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#f8fafc', textTransform: 'uppercase' }}>
@@ -1081,11 +1742,11 @@ export default function CanvasBoard() {
               </div>
             )}
 
-            {/* 4. Bucket Fill Panel */}
+            {/* 4. Bucket Fill Panel with Transparency / Opacity Slider (Audio 1) */}
             {activePanel === 'fill' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
-                  <span style={{ color: '#cbd5e1' }}>Fill Shape Surface:</span>
+                  <span style={{ color: '#cbd5e1' }}>Fill Status:</span>
                   <button
                     onClick={() => setIsFillActive(!isFillActive)}
                     style={{
@@ -1102,18 +1763,120 @@ export default function CanvasBoard() {
                     {isFillActive ? 'Active' : 'Off'}
                   </button>
                 </div>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
-                  Draw shapes with solid color fills or click any existing shape to apply color fill.
+
+                {/* Opacity / Transparency Slider */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
+                    <span>Opacity / Transparency:</span>
+                    <strong style={{ color: '#f59e0b', fontFamily: 'monospace' }}>
+                      {Math.round(fillOpacity * 100)}% ({fillOpacity === 1 ? 'Bold' : fillOpacity <= 0.3 ? 'Glass' : 'Tint'})
+                    </strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value={fillOpacity}
+                    onChange={(e) => setFillOpacity(Number(e.target.value))}
+                    style={{ width: '100%', cursor: 'pointer', accentColor: '#f59e0b' }}
+                  />
+
+                  {/* Transparency Presets */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 4 }}>
+                    {[
+                      { label: 'Glass (25%)', val: 0.25 },
+                      { label: 'Tint (60%)', val: 0.6 },
+                      { label: 'Bold (100%)', val: 1.0 },
+                    ].map((pre) => (
+                      <button
+                        key={pre.label}
+                        onClick={() => setFillOpacity(pre.val)}
+                        style={{
+                          padding: '5px 0',
+                          borderRadius: 8,
+                          fontSize: 10,
+                          fontWeight: 500,
+                          border: fillOpacity === pre.val ? '1px solid #f59e0b' : '1px solid #374151',
+                          background: fillOpacity === pre.val ? 'rgba(245, 158, 11, 0.25)' : '#1f2937',
+                          color: fillOpacity === pre.val ? '#fbbf24' : '#94a3b8',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {pre.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Checkerboard Preview Box */}
+                  <div
+                    style={{
+                      height: 24,
+                      borderRadius: 6,
+                      marginTop: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundImage: `repeating-conic-gradient(#374151 0% 25%, #1f2937 0% 50%)`,
+                      backgroundSize: '12px 12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 6,
+                        backgroundColor: hexToRgba(currentColor, fillOpacity),
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <p style={{ fontSize: 10, color: '#94a3b8', margin: 0, lineHeight: 1.3 }}>
+                  Click any existing shape to fill it, or draw new shapes with this opacity.
                 </p>
               </div>
             )}
 
-            {/* 5. Eraser Panel */}
+            {/* 5. Precision Paint Eraser with Scale (Audio 1) */}
             {activePanel === 'eraser' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 600 }}>Precision Eraser</span>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
-                  Drag across any stroke or shape on the canvas to erase it instantly.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#cbd5e1' }}>
+                  <span>Eraser Size:</span>
+                  <span style={{ fontFamily: 'monospace', color: '#ef4444', fontWeight: 'bold' }}>
+                    {eraserRadius * 2}px
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="6"
+                  max="60"
+                  value={eraserRadius}
+                  onChange={(e) => setEraserRadius(Number(e.target.value))}
+                  style={{ width: '100%', cursor: 'pointer', accentColor: '#ef4444' }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                  {PRESET_ERASER_SIZES.map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => setEraserRadius(p.value)}
+                      style={{
+                        padding: '6px 0',
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        border: eraserRadius === p.value ? '1px solid #ef4444' : '1px solid #374151',
+                        background: eraserRadius === p.value ? 'rgba(239, 68, 68, 0.2)' : '#1f2937',
+                        color: eraserRadius === p.value ? '#f87171' : '#94a3b8',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.3 }}>
+                  Drag over strokes to carve and trim parts seamlessly like Paint.
                 </p>
               </div>
             )}
@@ -1194,7 +1957,7 @@ export default function CanvasBoard() {
             {/* Satellite 4: Bucket Fill */}
             <button
               onClick={() => toggleSatellitePanel('fill')}
-              title="Bucket Fill"
+              title="Bucket Fill (Transparency / Bold)"
               className={`satellite-btn satellite-4 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
@@ -1214,7 +1977,7 @@ export default function CanvasBoard() {
             {/* Satellite 5: Eraser */}
             <button
               onClick={() => toggleSatellitePanel('eraser')}
-              title="Eraser"
+              title="Paint Eraser"
               className={`satellite-btn satellite-5 glass-surface ${!isRadialOpen ? 'satellite-closed' : ''}`}
               style={{
                 width: 44,
@@ -1265,7 +2028,7 @@ export default function CanvasBoard() {
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 4. BOTTOM-RIGHT: Rocket Jet Speed Controls & Propulsion     */}
+      {/* 5. BOTTOM-RIGHT: Rocket Jet Speed Controls (Click-to-Fly)   */}
       {/* ----------------------------------------------------------- */}
       <div
         className="dock-bottom-right"
@@ -1281,7 +2044,6 @@ export default function CanvasBoard() {
           pointerEvents: 'none',
         }}
       >
-        {/* Speed Tier Selector (Appears when Rocket mode is active) */}
         {isRocketMode && (
           <div
             className="glass-popover interactive"
@@ -1329,7 +2091,6 @@ export default function CanvasBoard() {
           </div>
         )}
 
-        {/* Main Rocket Toggle Button */}
         <button
           onClick={() => {
             setIsRocketMode((prev) => {
@@ -1338,12 +2099,13 @@ export default function CanvasBoard() {
                 setActiveTool('pan');
                 setIsRadialOpen(false);
                 setActivePanel(null);
+                setIsMediaHubOpen(false);
               }
               return next;
             });
           }}
           title={isRocketMode ? 'Disable Rocket Mode' : 'Enable Rocket Jet Speed Navigation'}
-          className="btn-hover-scale interactive"
+          className="interactive-btn interactive"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1369,7 +2131,7 @@ export default function CanvasBoard() {
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 5. DYNAMIC ROCKET CURSOR (When Rocket Jet Mode is active)   */}
+      {/* 6. DYNAMIC ROCKET CURSOR (When Rocket Jet Mode is active)   */}
       {/* ----------------------------------------------------------- */}
       {isRocketMode && (
         <div
@@ -1411,7 +2173,29 @@ export default function CanvasBoard() {
       )}
 
       {/* ----------------------------------------------------------- */}
-      {/* 6. PRIMARY HIGH-PERFORMANCE INTERACTIVE HTML5 CANVAS        */}
+      {/* 7. DYNAMIC PAINT ERASER CIRCULAR CURSOR                    */}
+      {/* ----------------------------------------------------------- */}
+      {activeTool === 'eraser' && !isRocketMode && (
+        <div
+          style={{
+            position: 'fixed',
+            pointerEvents: 'none',
+            zIndex: 9999,
+            left: `${mouseScreenPos.current.x}px`,
+            top: `${mouseScreenPos.current.y}px`,
+            width: `${eraserRadius * 2 * zoom}px`,
+            height: `${eraserRadius * 2 * zoom}px`,
+            borderRadius: '50%',
+            border: '2px solid rgba(239, 68, 68, 0.8)',
+            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            transform: 'translate(-50%, -50%)',
+            boxShadow: '0 0 10px rgba(239, 68, 68, 0.4)',
+          }}
+        />
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* 8. PRIMARY INTERACTIVE HTML5 CANVAS                        */}
       {/* ----------------------------------------------------------- */}
       <canvas
         ref={canvasRef}
@@ -1429,9 +2213,11 @@ export default function CanvasBoard() {
             : activeTool === 'pen'
             ? 'crosshair'
             : activeTool === 'eraser'
-            ? 'cell'
+            ? 'none'
             : activeTool === 'shape'
             ? 'crosshair'
+            : activeTool === 'text'
+            ? 'text'
             : 'grab',
         }}
       />
