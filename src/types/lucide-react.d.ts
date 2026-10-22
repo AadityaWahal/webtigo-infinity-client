@@ -54,6 +54,9 @@ declare module 'lucide-react' {
   export const Calendar: LucideIcon;
   export const Clock: LucideIcon;
   export const Share2: LucideIcon;
+  export const ChevronDown: LucideIcon;
+  export const Terminal: LucideIcon;
+  export const MessageSquare: LucideIcon;
   export const Users: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };

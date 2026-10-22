@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -23,6 +23,14 @@ import {
   Flame,
   MousePointer,
   HelpCircle,
+  Calendar,
+  Clock,
+  ChevronDown,
+  Terminal,
+  MessageSquare,
+  FileText,
+  Share2,
+  Check,
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -32,6 +40,8 @@ interface LandingPageProps {
 
 export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPageProps) {
   const router = useRouter();
+  const [activeFaq, setActiveFaq] = useState<number | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const handleEnterCanvas = () => {
     if (onEnterCanvas) {
@@ -48,8 +58,21 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       router.push(`/blog?tab=${tab}`);
     }
   };
+
+  const handleShare = () => {
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.origin);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const toggleFaq = (index: number) => {
+    setActiveFaq(activeFaq === index ? null : index);
+  };
+
   return (
-    <div className="relative min-h-screen w-screen overflow-x-hidden bg-[#07090e] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col">
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#07090e] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col">
       {/* Dynamic Ambient Glow Gradients */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-b from-indigo-600/20 via-cyan-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/3 -left-48 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -120,7 +143,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       </nav>
 
       {/* Main Content Area */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-16 text-center max-w-5xl mx-auto space-y-16">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-16 text-center max-w-5xl mx-auto space-y-20">
         {/* Futuristic Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 backdrop-blur-xl text-xs font-semibold text-indigo-300 shadow-sm animate-fade-in">
           <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -136,9 +159,10 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
             </span>
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto">
-            Endlessync is a persistent, boundless collaborative universe. Navigate at warp speed with
+            <strong>Endlessync</strong> (also known as <em>Endless Sync</em> and formerly <em>Webtigo Infinity Canvas</em>)
+            is a persistent, boundary-free collaborative digital universe. Navigate at warp speed with
             2D rocket propulsion, sketch ideas with transparency-controlled vector brushes, and pin
-            voice notes, text, and photos anywhere in infinite space.
+            voice notes, text, and photos anywhere in infinite Cartesian space.
           </p>
         </div>
 
@@ -182,7 +206,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
                 Most tools lock you into private invite-only rooms or fleeting vertical feeds. Endlessync was born
                 from a late-night epiphany: a truly infinite, open digital whiteboard where anyone can leave a mark,
                 collaborate across continents, and explore boundless ideas simultaneously. Originally built as
-                <em> Weptigo Infinity Canvas</em>, it has been reborn with high-velocity real-time WebSockets and AI acceleration.
+                <em> Webtigo Infinity Canvas</em>, it has been reborn with high-velocity real-time WebSockets and AI acceleration.
               </p>
             </div>
 
@@ -199,7 +223,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
         {/* --------------------------------------------------------- */}
         {/* FRONT-END TOOLS & CONTROLS GUIDE (Tailored & Visual)      */}
         {/* --------------------------------------------------------- */}
-        <div className="w-full space-y-8 text-left">
+        <section className="w-full space-y-8 text-left">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800 pb-5">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400 uppercase tracking-wider">
@@ -211,15 +235,13 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
               </h2>
             </div>
 
-            {onOpenBlog && (
-              <button
-                onClick={() => onOpenBlog('guide')}
-                className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <span>Read Complete In-Depth Guide</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={() => handleOpenBlog('guide')}
+              className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <span>Read Complete In-Depth Guide</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -295,7 +317,282 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
               </p>
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* --------------------------------------------------------- */}
+        {/* COMPREHENSIVE ON-PAGE EDITORIAL & BLOG ARTICLES (AdSense) */}
+        {/* --------------------------------------------------------- */}
+        <section className="w-full space-y-12 text-left pt-6">
+          <div className="border-b border-slate-800 pb-5">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-semibold text-cyan-300 mb-3">
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Endlessync Knowledge Base & Official Publications</span>
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Deep Dives, Stories & Engineering Behind Endlessync
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-2 max-w-2xl leading-relaxed">
+              Explore the design philosophy, technical architecture, and vision powering the world's largest
+              open-access collaborative infinite canvas. Written for creators, software engineers, and digital explorers.
+            </p>
+          </div>
+
+          <div className="space-y-10">
+            {/* Article 1: The Midnight Spark Behind Endlessync */}
+            <article className="p-8 sm:p-10 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-slate-700/80 transition duration-300 space-y-6">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span className="px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold">
+                  Founder's Story
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  October 2026
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  8 min read
+                </span>
+                <span>•</span>
+                <span className="text-slate-300 font-medium">By Aaditya Wahal</span>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-bold text-white hover:text-cyan-300 transition">
+                The Midnight Spark Behind Endlessync (Webtigo Infinity Canvas)
+              </h3>
+
+              <div className="text-xs sm:text-sm text-slate-300 space-y-4 leading-relaxed">
+                <p>
+                  It was late at night, 3 AM, and as many times before I was awake, wasting time and overthinking.
+                  My mind was buzzing around randomly, as it always does, when one very distinct thought came to me
+                  that instantly caught my focus: <strong>what if the whole world was an infinitely large board?</strong>
+                </p>
+                <p>
+                  Every site and tool we encounter in daily life is separated into private rooms or accounts.
+                  Open a digital whiteboard and it's in a private room meant for only you or maybe a tiny team
+                  of collaborators who came to the workspace through an invite link. Social media is just vertical
+                  streams of content that go away fast. I wondered what it would be like if there was one open space
+                  on the web that was infinite — a big old digital whiteboard that anyone could join.
+                </p>
+                <p>
+                  So that was the beginning of <strong>Endless Sync (Endlessync)</strong>. The idea is simple to understand:
+                  an enormous, infinite canvas that you can scroll in any direction, forever. No boundaries, no borders,
+                  no resets. If you draw something at coordinates <code className="text-cyan-300 bg-slate-800 px-1 py-0.5 rounded">(1500, 3200)</code>,
+                  it stays there. Someone from halfway across the world can scroll past it months later, see your work,
+                  and draw something right next to it.
+                </p>
+                <p>
+                  The first version was called <strong>Webtigo Infinity Canvas</strong>. It was a rough prototype made with
+                  vanilla JavaScript and a small server. It worked, but it was slow and when ten people drew at once, the lines
+                  lagged. Realizing the scale of this vision required rebuilding the engine from the ground up: zero-latency
+                  WebSockets, 2D rocket thrusters to traverse millions of pixels, and a protected origin sanctuary at
+                  <code className="text-cyan-300 bg-slate-800 px-1 py-0.5 rounded">(0, 0)</code> so the heart of the world remains preserved.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800/80">
+                <button
+                  onClick={() => handleOpenBlog('story')}
+                  className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <span>Read Full Original Founder's Post</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleShare}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition cursor-pointer"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Copied URL!' : 'Share Article'}</span>
+                </button>
+              </div>
+            </article>
+
+            {/* Article 2: The Engineering of an Infinite Cartesian Universe */}
+            <article className="p-8 sm:p-10 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-slate-700/80 transition duration-300 space-y-6">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold">
+                  Engineering Deep Dive
+                </span>
+                <span className="flex items-center gap-1">
+                  <Terminal className="w-3.5 h-3.5 text-slate-500" />
+                  Systems Architecture
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  6 min read
+                </span>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-bold text-white hover:text-cyan-300 transition">
+                The Architecture of an Infinite Cartesian Whiteboard
+              </h3>
+
+              <div className="text-xs sm:text-sm text-slate-300 space-y-4 leading-relaxed">
+                <p>
+                  Building an unbounded 2D canvas poses unique mathematical and network challenges that conventional
+                  document-based apps never face. Traditional web apps render elements into finite pixel containers with
+                  fixed aspect ratios. Endlessync, by contrast, operates on an unconstrained Cartesian coordinate system
+                  where coordinates span from <code className="text-cyan-300 bg-slate-800 px-1 py-0.5 rounded">-Infinity</code> to{' '}
+                  <code className="text-cyan-300 bg-slate-800 px-1 py-0.5 rounded">+Infinity</code>.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-3">
+                  <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-1.5">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-cyan-400" /> Coordinate Transformation
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-normal">
+                      Viewport mapping transforms screen coordinates to world coordinates via{' '}
+                      <code className="text-[11px] text-cyan-300">worldX = (screenX - panOffset.x) / zoom</code>.
+                      This maintains mathematical precision regardless of window resize or zoom level.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-1.5">
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-emerald-400" /> Real-Time Sync Pipeline
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-normal">
+                      Full-duplex WebSocket connections broadcast point deltas in real-time, accompanied by
+                      automated ping/pong heartbeats to keep render nodes and client sessions persistent 24/7.
+                    </p>
+                  </div>
+                </div>
+                <p>
+                  To protect against griefing and accidental wiping, two crucial architectural pillars were engineered:
+                  the permanent elimination of a global "Clear All" button, and the <strong>Origin Sanctuary</strong>.
+                  The Sanctuary reserves a 280-pixel radial zone centered at <code className="text-rose-400 bg-slate-800 px-1 py-0.5 rounded">(0, 0)</code>,
+                  rendering the glowing Endlessync centerpiece untouchable while granting the rest of the universe complete creative freedom.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800/80">
+                <button
+                  onClick={() => handleOpenBlog('guide')}
+                  className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <span>Explore Technical Documentation</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </article>
+
+            {/* Article 3: Spatial Collaboration & Audio Notes */}
+            <article className="p-8 sm:p-10 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-slate-700/80 transition duration-300 space-y-6">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-semibold">
+                  Spatial Productivity
+                </span>
+                <span className="flex items-center gap-1">
+                  <Mic className="w-3.5 h-3.5 text-slate-500" />
+                  Multimedia Innovation
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  5 min read
+                </span>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-bold text-white hover:text-cyan-300 transition">
+                Spatial Memory: Why Unbounded Canvases Beat Folder Trees
+              </h3>
+
+              <div className="text-xs sm:text-sm text-slate-300 space-y-4 leading-relaxed">
+                <p>
+                  Human cognition evolved to recall locations spatially. In traditional operating systems and productivity tools,
+                  knowledge is buried inside hierarchical nested folders, tabs, and channels where ideas go to die.
+                  On an infinite whiteboard, concepts occupy dedicated spatial territories.
+                </p>
+                <p>
+                  Endlessync introduces the <strong>Spatial Media Hub</strong>, allowing creators to anchor rich text sticky cards,
+                  photographs, and microphone voice notes directly into coordinate space. Whether leaving a spontaneous voice memo
+                  explaining a diagram at <code className="text-indigo-300 bg-slate-800 px-1 py-0.5 rounded">(4500, -820)</code>, or
+                  pinning research screenshots next to an architectural flowchart, every element retains its persistent geographic place in the universe.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800/80">
+                <button
+                  onClick={handleEnterCanvas}
+                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <span>Test Spatial Pinning on Canvas</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------- */}
+        {/* INTERACTIVE FREQUENTLY ASKED QUESTIONS (FAQ)              */}
+        {/* --------------------------------------------------------- */}
+        <section className="w-full space-y-8 text-left pt-6">
+          <div className="border-b border-slate-800 pb-5">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs font-semibold text-amber-300 mb-3">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Got Questions?</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Frequently Asked Questions (FAQ)
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Everything you need to know about navigating, collaborating, and creating on Endlessync.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {[
+              {
+                q: "What is Endlessync (formerly Webtigo Infinity Canvas)?",
+                a: "Endlessync is a persistent, boundary-free collaborative digital whiteboard. Unlike conventional tools that force you into isolated private rooms, Endlessync hosts a single shared Cartesian universe where anyone across the world can sketch, brainstorm, pin audio notes, and explore simultaneously in real time."
+              },
+              {
+                q: "How does navigation across the infinite plane work?",
+                a: "You can pan freely by selecting the Hand/Pan tool or by holding the Spacebar and dragging anywhere on the canvas. To cover massive distances, toggle Rocket Mode to cruise at 10x, 24x, or 48x warp velocities. The top-left HUD displays your live (X, Y) coordinates and provides an instant Teleport input."
+              },
+              {
+                q: "Can anyone erase or clear the entire canvas?",
+                a: "No. In Endlessync, there is no global 'Clear All' button. This ensures that no individual can maliciously wipe the hard work of contributors worldwide. Erasers function like precision paint erasers that only shave touched strokes, and the Origin Sanctuary preserves the center emblem."
+              },
+              {
+                q: "What is the Protected Origin Sanctuary at (0, 0)?",
+                a: "The Origin Sanctuary is a circular protected zone with a 280-pixel radius centered at (0, 0). It houses the glowing Endlessync emblem centerpiece. Drawing or placing media inside this sanctuary is prevented by the engine to ensure the world's origin remains an immutable landmark for navigation."
+              },
+              {
+                q: "How do voice notes and text cards work?",
+                a: "Open the bottom-left Media Hub (+) and choose either Text Note or Audio Note. For audio notes, speak into your microphone to record a quick thought. Once confirmed, a crosshair stamp cursor appears: simply click anywhere on the infinite canvas to anchor your note spatially for anyone to discover."
+              },
+              {
+                q: "Is Endlessync free to use, and do I need to register?",
+                a: "Endlessync is 100% free and open to everyone worldwide. No account registration, password, or login is required. You can jump directly into the workspace, collaborate with teammates, or leave your digital mark in seconds."
+              }
+            ].map((faq, idx) => (
+              <div
+                key={idx}
+                className="rounded-2xl bg-slate-900/50 border border-slate-800/80 overflow-hidden transition"
+              >
+                <button
+                  onClick={() => toggleFaq(idx)}
+                  className="w-full p-5 text-left flex items-center justify-between gap-4 text-sm font-semibold text-white hover:text-cyan-300 transition cursor-pointer"
+                >
+                  <span>{faq.q}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
+                      activeFaq === idx ? 'rotate-180 text-cyan-400' : ''
+                    }`}
+                  />
+                </button>
+                {activeFaq === idx && (
+                  <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-slate-300 leading-relaxed border-t border-slate-800/50 animate-fade-in">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Architecture & 24/7 Hosting Reliability Callout */}
         <div className="w-full p-6 sm:p-8 rounded-3xl backdrop-blur-2xl bg-slate-900/40 border border-slate-800 text-left flex flex-col md:flex-row items-center justify-between gap-6">
@@ -323,8 +620,14 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       </main>
 
       {/* Footer */}
-      <footer className="relative z-20 py-6 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-3">
-        <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
+      <footer className="relative z-20 py-8 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-left">
+          <div className="flex items-center gap-2">
+            <img src="/media/endlessync-symbol.png" alt="Emblem" className="w-4 h-4 object-contain" />
+            <span className="font-bold text-white">Endlessync</span>
+          </div>
+          <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
+        </div>
         <div className="flex items-center gap-4">
           <button
             onClick={() => handleOpenBlog('story')}
@@ -338,6 +641,13 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
             className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
           >
             Official User Guide →
+          </button>
+          <span className="text-slate-700">•</span>
+          <button
+            onClick={handleEnterCanvas}
+            className="text-slate-300 hover:text-white transition cursor-pointer font-medium"
+          >
+            Launch Canvas
           </button>
         </div>
       </footer>
