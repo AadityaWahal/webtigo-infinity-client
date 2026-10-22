@@ -197,10 +197,15 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // Eraser with Paint-like cursor scale (Requirement from Audio 1)
   const [eraserRadius, setEraserRadius] = useState<number>(24);
 
-  // Interaction tracking
+  // Interaction & Multi-Touch Tracking
   const isInteracting = useRef(false);
   const startPoint = useRef<Point>({ x: 0, y: 0 });
   const currentStroke = useRef<Point[]>([]);
+  const activePointers = useRef<Map<number, Point>>(new Map());
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartZoom = useRef<number>(1);
+  const pinchStartPan = useRef<Point>({ x: 0, y: 0 });
+  const pinchStartCenter = useRef<Point>({ x: 0, y: 0 });
 
   // -----------------------------------------------------------
   // Socket & Sync Status
@@ -263,7 +268,6 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // -----------------------------------------------------------
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMusicEnabled, setIsMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.5); // Default 50%
@@ -335,13 +339,6 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       localStorage.setItem('endlessync_theme', nextTheme);
       document.body.setAttribute('data-theme', nextTheme);
     }
-  };
-
-  const handleClearCanvas = () => {
-    setElements([]);
-    socket.emit('canvas:clear');
-    setShowClearConfirm(false);
-    setIsSettingsOpen(false);
   };
 
   const bgAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -1069,6 +1066,24 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // Pointer Events & Drawing Handlers
   // -----------------------------------------------------------
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Track pointer for multi-touch pinch gesture
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Handle 2-finger pinch initiation
+    if (activePointers.current.size === 2) {
+      isInteracting.current = false;
+      const pts = Array.from(activePointers.current.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchStartDist.current = dist > 0 ? dist : 1;
+      pinchStartZoom.current = zoomRef.current;
+      pinchStartPan.current = { ...panOffsetRef.current };
+      pinchStartCenter.current = {
+        x: (pts[0].x + pts[1].x) / 2,
+        y: (pts[0].y + pts[1].y) / 2,
+      };
+      return;
+    }
+
     if (activePanel) setActivePanel(null);
     if (isTeleportOpen) setIsTeleportOpen(false);
 
@@ -1182,6 +1197,41 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Update pointer position for pinch tracking
+    if (activePointers.current.has(e.pointerId)) {
+      activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Two-finger Pinch-to-Zoom and Dual-Finger Pan
+    if (activePointers.current.size >= 2) {
+      isInteracting.current = false;
+      const pts = Array.from(activePointers.current.values());
+      const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const currentCenter = {
+        x: (pts[0].x + pts[1].x) / 2,
+        y: (pts[0].y + pts[1].y) / 2,
+      };
+
+      if (pinchStartDist.current && pinchStartDist.current > 0) {
+        const scaleChange = currentDist / pinchStartDist.current;
+        const newZoom = Math.min(Math.max(pinchStartZoom.current * scaleChange, 0.0001), 50);
+
+        // Adjust pan offset centered around the midpoint between fingers
+        const startCenter = pinchStartCenter.current;
+        const startPan = pinchStartPan.current;
+
+        const panShiftX = currentCenter.x - startCenter.x;
+        const panShiftY = currentCenter.y - startCenter.y;
+
+        const newPanX = currentCenter.x - (startCenter.x - startPan.x) * (newZoom / pinchStartZoom.current) + panShiftX;
+        const newPanY = currentCenter.y - (startCenter.y - startPan.y) * (newZoom / pinchStartZoom.current) + panShiftY;
+
+        setZoom(newZoom);
+        setPanOffset({ x: newPanX, y: newPanY });
+      }
+      return;
+    }
+
     mouseScreenPos.current = { x: e.clientX, y: e.clientY };
     if (pendingPlacement) {
       setMousePos({ x: e.clientX, y: e.clientY });
@@ -1276,6 +1326,13 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointers.current.delete(e.pointerId);
+
+    // Reset pinch state when fingers drop below 2
+    if (activePointers.current.size < 2) {
+      pinchStartDist.current = null;
+    }
+
     if (isRocketMode) {
       isRocketClickActive.current = false;
       setIsThrusting(false);
@@ -1926,89 +1983,6 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
                   </>
                 )}
               </button>
-            </div>
-
-            {/* Clear Board Option with Confirmation */}
-            <div
-              style={{
-                paddingTop: 8,
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
-              {!showClearConfirm ? (
-                <button
-                  onClick={() => setShowClearConfirm(true)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    padding: '8px 12px',
-                    borderRadius: 10,
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                    color: '#f87171',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Trash2 style={{ width: 14, height: 14 }} />
-                  <span>Clear Canvas Board</span>
-                </button>
-              ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    padding: 10,
-                    borderRadius: 10,
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                  }}
-                >
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fca5a5', textAlign: 'center' }}>
-                    Clear all elements on the canvas?
-                  </span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={handleClearCanvas}
-                      style={{
-                        flex: 1,
-                        padding: '6px 0',
-                        borderRadius: 8,
-                        background: '#ef4444',
-                        border: 'none',
-                        color: '#fff',
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Yes, Clear
-                    </button>
-                    <button
-                      onClick={() => setShowClearConfirm(false)}
-                      style={{
-                        flex: 1,
-                        padding: '6px 0',
-                        borderRadius: 8,
-                        background: 'rgba(255,255,255,0.1)',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                        color: '#cbd5e1',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -3061,6 +3035,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
         style={{
           width: '100%',
