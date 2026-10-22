@@ -31,6 +31,11 @@ import {
   Pause,
   ArrowLeft,
   Volume2,
+  Volume1,
+  VolumeX,
+  Music,
+  Settings,
+  SkipForward,
   FileText,
   BookOpen,
   ShieldCheck,
@@ -71,6 +76,17 @@ export interface CanvasElement {
   title?: string;
   duration?: number;
 }
+
+// -------------------------------------------------------------
+// 5 Background Ambient Tracks (with silence gaps & circular looping)
+// -------------------------------------------------------------
+const BACKGROUND_PLAYLIST = [
+  { title: 'Cosmic Drift', src: '/media/background.mp3' },
+  { title: 'Synthwave Soundscape', src: '/media/tunetank-synthwave-soundscape-348458.mp3' },
+  { title: 'Exploring the Cosmos', src: '/media/monolithaudio-exploring-the-cosmos-235442.mp3' },
+  { title: 'Astral Chase', src: '/media/alexander-nakarada-chase(chosic.com).mp3' },
+  { title: 'Sound of Eternity', src: '/media/alien_i_trust-alien-i-trust-sound-of-eternity-original-edition-241236.mp3' },
+];
 
 const PRESET_COLORS = [
   '#ffffff', // White
@@ -236,6 +252,139 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   const recordIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  // -----------------------------------------------------------
+  // Top-Right Settings & Ambient Background Audio Engine
+  // -----------------------------------------------------------
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMusicEnabled, setIsMusicEnabled] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(0.5); // Default 50%
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [isPlayingMusic, setIsPlayingMusic] = useState(false);
+
+  const bgAudioRef = useRef<HTMLAudioElement | null>(null);
+  const gapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMusicEnabledRef = useRef(isMusicEnabled);
+  isMusicEnabledRef.current = isMusicEnabled;
+  const musicVolumeRef = useRef(musicVolume);
+  musicVolumeRef.current = musicVolume;
+  const currentTrackIndexRef = useRef(currentTrackIndex);
+  currentTrackIndexRef.current = currentTrackIndex;
+
+  const playTrack = useCallback((index: number, fadeIn = true) => {
+    if (!isMusicEnabledRef.current) return;
+    if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+    if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+
+    if (!bgAudioRef.current) {
+      bgAudioRef.current = new Audio();
+    }
+    const audio = bgAudioRef.current;
+    audio.pause();
+    audio.src = BACKGROUND_PLAYLIST[index].src;
+    audio.loop = false;
+
+    const targetVol = musicVolumeRef.current;
+    if (fadeIn) {
+      audio.volume = 0.05;
+    } else {
+      audio.volume = targetVol;
+    }
+
+    audio
+      .play()
+      .then(() => {
+        setIsPlayingMusic(true);
+        if (fadeIn && targetVol > 0.05) {
+          let currentV = 0.05;
+          const step = (targetVol - 0.05) / 20;
+          fadeIntervalRef.current = setInterval(() => {
+            currentV = Math.min(targetVol, currentV + step);
+            if (audio) audio.volume = currentV;
+            if (currentV >= targetVol && fadeIntervalRef.current) {
+              clearInterval(fadeIntervalRef.current);
+            }
+          }, 100);
+        }
+      })
+      .catch(() => {
+        setIsPlayingMusic(false);
+      });
+
+    audio.onended = () => {
+      setIsPlayingMusic(false);
+      // Ambient silence gap between tracks (5 seconds) before circularly playing the next track
+      gapTimeoutRef.current = setTimeout(() => {
+        if (!isMusicEnabledRef.current) return;
+        const nextIndex = (index + 1) % BACKGROUND_PLAYLIST.length;
+        setCurrentTrackIndex(nextIndex);
+        currentTrackIndexRef.current = nextIndex;
+        playTrack(nextIndex, true);
+      }, 5000);
+    };
+  }, []);
+
+  const handleVolumeChange = (newVol: number) => {
+    setMusicVolume(newVol);
+    musicVolumeRef.current = newVol;
+    if (bgAudioRef.current) {
+      bgAudioRef.current.volume = newVol;
+    }
+    if (newVol > 0 && !isMusicEnabled) {
+      setIsMusicEnabled(true);
+      isMusicEnabledRef.current = true;
+      playTrack(currentTrackIndexRef.current, false);
+    }
+  };
+
+  const toggleMusic = () => {
+    const nextState = !isMusicEnabled;
+    setIsMusicEnabled(nextState);
+    isMusicEnabledRef.current = nextState;
+    if (nextState) {
+      playTrack(currentTrackIndexRef.current, true);
+    } else {
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+      if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      if (bgAudioRef.current) bgAudioRef.current.pause();
+      setIsPlayingMusic(false);
+    }
+  };
+
+  const handleSkipTrack = () => {
+    const nextIndex = (currentTrackIndex + 1) % BACKGROUND_PLAYLIST.length;
+    setCurrentTrackIndex(nextIndex);
+    currentTrackIndexRef.current = nextIndex;
+    if (isMusicEnabled) {
+      playTrack(nextIndex, true);
+    }
+  };
+
+  // Autoplay music on user arrival / first interaction
+  useEffect(() => {
+    playTrack(0, true);
+
+    const handleFirstGesture = () => {
+      if (isMusicEnabledRef.current && (!bgAudioRef.current || bgAudioRef.current.paused)) {
+        playTrack(currentTrackIndexRef.current, true);
+      }
+    };
+
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+    window.addEventListener('keydown', handleFirstGesture, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+      if (gapTimeoutRef.current) clearTimeout(gapTimeoutRef.current);
+      if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      if (bgAudioRef.current) {
+        bgAudioRef.current.pause();
+        bgAudioRef.current.src = '';
+      }
+    };
+  }, [playTrack]);
 
   // -----------------------------------------------------------
   // Bottom-Right Rocket Jet Mode State (Infinite Click-to-Fly)
@@ -1453,7 +1602,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       </div>
 
       {/* ----------------------------------------------------------- */}
-      {/* 2. TOP-RIGHT HUD: Real-Time Connection & Peer Counter       */}
+      {/* 2. TOP-RIGHT HUD: Settings Gear & Audio Controls (Replaces sync) */}
       {/* ----------------------------------------------------------- */}
       <div
         className="dock-top-right interactive"
@@ -1463,35 +1612,183 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           right: 18,
           zIndex: 50,
           display: 'flex',
-          alignItems: 'center',
-          gap: 10,
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 8,
         }}
       >
-        <div
-          className="glass-surface"
+        {/* Settings Gear Trigger Button */}
+        <button
+          onClick={() => setIsSettingsOpen((prev) => !prev)}
+          title="Settings & Audio"
+          className="glass-surface interactive-btn"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '7px 14px',
-            borderRadius: 9999,
+            gap: 7,
+            padding: '8px 14px',
+            borderRadius: 16,
+            color: isSettingsOpen ? '#38bdf8' : '#e2e8f0',
+            border: isSettingsOpen ? '1px solid rgba(56, 189, 248, 0.5)' : undefined,
             fontSize: 12,
-            fontWeight: 500,
-            color: isConnected ? '#6ee7b7' : '#fca5a5',
+            fontWeight: 600,
+            cursor: 'pointer',
           }}
         >
-          {isConnected ? (
-            <Wifi style={{ width: 14, height: 14, color: '#10b981' }} />
-          ) : (
-            <WifiOff style={{ width: 14, height: 14, color: '#ef4444' }} />
+          <Settings
+            style={{
+              width: 16,
+              height: 16,
+              color: isSettingsOpen ? '#38bdf8' : '#94a3b8',
+              transform: isSettingsOpen ? 'rotate(45deg)' : 'none',
+              transition: 'transform 0.25s ease',
+            }}
+          />
+          <span className="hidden sm:inline">Settings</span>
+          {isMusicEnabled && isPlayingMusic && (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 8px #10b981',
+              }}
+            />
           )}
-          <span>{isConnected ? 'Sync Active' : 'Connecting...'}</span>
-          {pingLatency !== null && isConnected && (
-            <span style={{ fontSize: 11, opacity: 0.8, fontFamily: 'monospace', marginLeft: 4 }}>
-              {pingLatency}ms
-            </span>
-          )}
-        </div>
+        </button>
+
+        {/* Settings Dropdown Popover */}
+        {isSettingsOpen && (
+          <div
+            className="glass-popover"
+            style={{
+              width: 290,
+              padding: 16,
+              borderRadius: 18,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                paddingBottom: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#fff' }}>
+                <Music style={{ width: 16, height: 16, color: '#38bdf8' }} />
+                <span>Audio & Settings</span>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+
+            {/* Music Toggle (ON / OFF) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#f8fafc' }}>Background Music</span>
+                <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                  {isMusicEnabled ? (isPlayingMusic ? 'Playing with gaps' : 'Intermission / Paused') : 'Muted'}
+                </span>
+              </div>
+              <button
+                onClick={toggleMusic}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 10,
+                  background: isMusicEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.15)',
+                  border: isMusicEnabled ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(239, 68, 68, 0.4)',
+                  color: isMusicEnabled ? '#6ee7b7' : '#fca5a5',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {isMusicEnabled ? <Volume2 style={{ width: 14, height: 14 }} /> : <VolumeX style={{ width: 14, height: 14 }} />}
+                <span>{isMusicEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+
+            {/* Volume Slider (Lower / Higher, Default 50%) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#cbd5e1' }}>
+                <span>Music Volume</span>
+                <span style={{ fontWeight: 600, color: '#38bdf8' }}>{Math.round(musicVolume * 100)}%</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Volume1 style={{ width: 14, height: 14, color: '#94a3b8' }} />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={musicVolume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  style={{ flex: 1, accentColor: '#38bdf8', cursor: 'pointer' }}
+                />
+                <Volume2 style={{ width: 14, height: 14, color: '#38bdf8' }} />
+              </div>
+            </div>
+
+            {/* Track Info & Skip Next */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                fontSize: 11,
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <span style={{ color: '#94a3b8', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Track {currentTrackIndex + 1} of {BACKGROUND_PLAYLIST.length}
+                </span>
+                <span style={{ color: '#f8fafc', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {BACKGROUND_PLAYLIST[currentTrackIndex]?.title}
+                </span>
+              </div>
+              <button
+                onClick={handleSkipTrack}
+                title="Skip to next track"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: '#38bdf8',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                <span>Skip</span>
+                <SkipForward style={{ width: 12, height: 12 }} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ----------------------------------------------------------- */}

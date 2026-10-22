@@ -58,6 +58,11 @@ declare module 'lucide-react' {
   export const Terminal: LucideIcon;
   export const MessageSquare: LucideIcon;
   export const Users: LucideIcon;
+  export const Settings: LucideIcon;
+  export const VolumeX: LucideIcon;
+  export const Volume1: LucideIcon;
+  export const Music: LucideIcon;
+  export const SkipForward: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };
   export default icons;
