@@ -31,6 +31,7 @@ import {
   FileText,
   Share2,
   Check,
+  Music,
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -88,9 +89,9 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       />
 
       {/* Top Navbar */}
-      <nav className="relative z-20 flex items-center justify-between px-6 sm:px-12 py-5 border-b border-slate-800/60 backdrop-blur-md bg-slate-900/30">
+      <nav className="relative z-20 flex flex-wrap items-center justify-between px-4 sm:px-12 py-4 sm:py-5 border-b border-slate-800/60 backdrop-blur-md bg-slate-900/30 gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-lg shadow-cyan-500/20 p-1">
+          <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-lg shadow-cyan-500/20 p-1 shrink-0">
             <img
               src="/media/endlessync-symbol.png"
               alt="Endlessync Logo"
@@ -99,51 +100,51 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold tracking-tight text-white flex items-center">
+              <span className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center">
                 Endless<span className="text-cyan-400">ync</span>
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
                 v2.0
               </span>
             </div>
-            <p className="text-xs text-slate-400">The Infinite Real-Time Collaborative Canvas</p>
+            <p className="text-[11px] sm:text-xs text-slate-400">The Infinite Real-Time Collaborative Canvas</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 ml-auto sm:ml-0">
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs text-emerald-400 font-medium">
             <Radio className="w-3.5 h-3.5 animate-pulse" />
             <span>24/7 Global Sync Active</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => handleOpenBlog('story')}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
             >
               <span>Founder's Story</span>
             </button>
             <button
               onClick={() => handleOpenBlog('guide')}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
             >
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-              <span>User Guide</span>
+              <span>Guide</span>
             </button>
           </div>
 
           <button
             onClick={handleEnterCanvas}
-            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+            className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-1.5 sm:py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer"
           >
             <span>Launch Canvas</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </nav>
 
       {/* Main Content Area */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-16 text-center max-w-5xl mx-auto space-y-20">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-12 py-12 sm:py-16 text-center max-w-5xl mx-auto space-y-16 sm:space-y-20 w-full">
         {/* Futuristic Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 backdrop-blur-xl text-xs font-semibold text-indigo-300 shadow-sm animate-fade-in">
           <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -314,6 +315,30 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
               <p className="text-xs text-slate-300 leading-relaxed">
                 There are no locked rooms or passwords—the canvas is a shared collective mural. Expand on existing
                 doodles, layer notes collaboratively, and build mind maps together in real-time.
+              </p>
+            </div>
+
+            {/* Tool 7: Ambient Audio Engine */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Music className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">7. Ambient Lo-Fi Soundscapes</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Enjoy 5 atmospheric cosmic tracks with gentle 5s silence gaps, circular looping, per-user volume
+                sliders, and skip forward options located in top-right Settings.
+              </p>
+            </div>
+
+            {/* Tool 8: Per-User Light & Dark Themes */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <Palette className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">8. Per-User Themes & Infinite Zoom</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Switch between Cosmic Dark and Clean Light mode independently without altering anyone else's display.
+                Zoom out infinitely to view entire galaxies of community creations.
               </p>
             </div>
           </div>
@@ -620,15 +645,15 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       </main>
 
       {/* Footer */}
-      <footer className="relative z-20 py-8 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-4">
-        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-left">
+      <footer className="relative z-20 py-6 sm:py-8 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-4 sm:px-12 gap-4 w-full">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
           <div className="flex items-center gap-2">
             <img src="/media/endlessync-symbol.png" alt="Emblem" className="w-4 h-4 object-contain" />
             <span className="font-bold text-white">Endlessync</span>
           </div>
           <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
           <button
             onClick={() => handleOpenBlog('story')}
             className="text-slate-400 hover:text-white transition cursor-pointer"

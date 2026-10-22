@@ -63,6 +63,11 @@ declare module 'lucide-react' {
   export const Volume1: LucideIcon;
   export const Music: LucideIcon;
   export const SkipForward: LucideIcon;
+  export const Sun: LucideIcon;
+  export const Moon: LucideIcon;
+  export const Trash2: LucideIcon;
+  export const Maximize: LucideIcon;
+  export const Minimize: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };
   export default icons;

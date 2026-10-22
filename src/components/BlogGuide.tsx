@@ -615,6 +615,55 @@ export default function BlogGuide({
                 </div>
               </section>
 
+              <hr className="border-slate-800 my-8" />
+
+              {/* 6. Audio Engine, Custom Themes & Fullscreen Immersion */}
+              <section className="space-y-5">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                  <span className="w-2 h-7 rounded-full bg-cyan-400 inline-block" />
+                  6. Ambient Audio Engine, Themes & Fullscreen Immersion
+                </h2>
+                <p>
+                  Endlessync is built to provide an immersive, flow-state creative experience tailored individually to each creator.
+                </p>
+
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-400" />
+                    Ambient Multi-Track Audio Engine
+                  </h3>
+                  <ul className="space-y-3 text-sm text-slate-300 list-disc pl-5">
+                    <li>
+                      <strong>5 Atmospheric Soundscapes:</strong> Curated ambient lo-fi tracks cycle in a seamless circular playlist (Cosmic Drift, Synthwave Soundscape, Exploring the Cosmos, Astral Chase, and Sound of Eternity).
+                    </li>
+                    <li>
+                      <strong>Natural Silence Gaps:</strong> Features gentle 5-second silence gaps between track transitions to keep your listening environment relaxing and non-fatiguing.
+                    </li>
+                    <li>
+                      <strong>Independent Audio Controls:</strong> Accessible via the top-right Settings Gear. Toggle music on/off, adjust personal volume (default 50%), or skip forward to the next track anytime.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Compass className="w-5 h-5 text-amber-400" />
+                    Individual Per-User Themes & Infinite Zoom
+                  </h3>
+                  <ul className="space-y-3 text-sm text-slate-300 list-disc pl-5">
+                    <li>
+                      <strong>Local Theme Preference:</strong> Switch between Cosmic Dark Mode and Clean Light Mode directly from the Settings menu. Each user's theme is saved locally in browser storage—changing your theme will never disturb your collaborators' screens.
+                    </li>
+                    <li>
+                      <strong>Infinite Zoom Horizon:</strong> Zoom out infinitely using your mouse wheel, trackpad pinch, or touch gestures to view whole galaxies of drawings, or zoom in for ultra-fine micro-drawings.
+                    </li>
+                    <li>
+                      <strong>Native Fullscreen Immersion:</strong> Auto-triggers full viewport mode when entering the canvas or pressing the Fullscreen toggle button, hiding address and browser chrome. Simply press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-300 text-xs">ESC</kbd> or click the Fullscreen button anytime to exit.
+                    </li>
+                  </ul>
+                </div>
+              </section>
+
               {/* Bottom Launch Card */}
               <div className="mt-12 p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-2xl">
                 <div className="space-y-1 text-left">

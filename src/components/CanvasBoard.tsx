@@ -39,6 +39,11 @@ import {
   FileText,
   BookOpen,
   ShieldCheck,
+  Sun,
+  Moon,
+  Trash2,
+  Maximize,
+  Minimize,
 } from 'lucide-react';
 
 // -------------------------------------------------------------
@@ -257,10 +262,87 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // Top-Right Settings & Ambient Background Audio Engine
   // -----------------------------------------------------------
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMusicEnabled, setIsMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.5); // Default 50%
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
+
+  // Fullscreen Detection & Sync
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    }
+  };
+
+  // Attempt auto-fullscreen on first click/touch (respects browser security policy)
+  useEffect(() => {
+    let triggered = false;
+    const triggerAutoFullscreen = () => {
+      if (triggered || document.fullscreenElement) return;
+      triggered = true;
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen();
+      }
+    };
+    window.addEventListener('click', triggerAutoFullscreen, { once: true });
+    window.addEventListener('touchstart', triggerAutoFullscreen, { once: true });
+    return () => {
+      window.removeEventListener('click', triggerAutoFullscreen);
+      window.removeEventListener('touchstart', triggerAutoFullscreen);
+    };
+  }, []);
+
+  // Initialize and persist local per-user theme
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = (localStorage.getItem('endlessync_theme') as 'dark' | 'light') || 'dark';
+      setTheme(savedTheme);
+      document.body.setAttribute('data-theme', savedTheme);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('endlessync_theme', nextTheme);
+      document.body.setAttribute('data-theme', nextTheme);
+    }
+  };
+
+  const handleClearCanvas = () => {
+    setElements([]);
+    socket.emit('canvas:clear');
+    setShowClearConfirm(false);
+    setIsSettingsOpen(false);
+  };
 
   const bgAudioRef = useRef<HTMLAudioElement | null>(null);
   const gapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -439,8 +521,10 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Dark Obsidian Cosmic Background
-    ctx.fillStyle = '#07090e';
+    const isLight = theme === 'light';
+
+    // Background Canvas Fill (Dark Obsidian vs Crisp Slate White)
+    ctx.fillStyle = isLight ? '#f8fafc' : '#07090e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Infinite Dot Matrix Grid with continuous modulo
@@ -448,7 +532,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     const offsetX = ((panOffset.x % gridSize) + gridSize) % gridSize;
     const offsetY = ((panOffset.y % gridSize) + gridSize) % gridSize;
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillStyle = isLight ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.12)';
     for (let x = offsetX - gridSize; x < canvas.width + gridSize; x += gridSize) {
       for (let y = offsetY - gridSize; y < canvas.height + gridSize; y += gridSize) {
         ctx.beginPath();
@@ -689,7 +773,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     });
 
     ctx.restore();
-  }, [panOffset, zoom, worldToScreen, playingAudioId]);
+  }, [panOffset, zoom, worldToScreen, playingAudioId, theme]);
 
   // Resize handler
   useEffect(() => {
@@ -834,12 +918,17 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       }
     };
 
+    const onCanvasCleared = () => {
+      setElements([]);
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('endlessync:init', onInit);
     socket.on('element:added', onElementAdded);
     socket.on('element:erased', onElementErased);
     socket.on('endlessync:users_count', onUsersCount);
+    socket.on('canvas:cleared', onCanvasCleared);
 
     if (socket.connected) setIsConnected(true);
 
@@ -850,6 +939,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       socket.off('element:added', onElementAdded);
       socket.off('element:erased', onElementErased);
       socket.off('endlessync:users_count', onUsersCount);
+      socket.off('canvas:cleared', onCanvasCleared);
     };
   }, []);
 
@@ -1243,7 +1333,8 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.15), 5);
+    // Infinite zoom horizon (zoom out down to 0.0001 for whole universes, zoom in up to 50x)
+    const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.0001), 50);
 
     const mouseX = e.clientX;
     const mouseY = e.clientY;
@@ -1424,10 +1515,10 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           <span className="hidden sm:inline">Home</span>
         </button>
 
-        {/* Read Blog / Guide Button */}
+        {/* Fullscreen Toggle Button */}
         <button
-          onClick={() => handleOpenBlog('guide')}
-          title="Read Founder Story & Guide"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? 'Exit Fullscreen (ESC)' : 'Enter Fullscreen (Max Screen)'}
           className="glass-surface interactive-btn"
           style={{
             display: 'flex',
@@ -1435,14 +1526,14 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
             gap: 6,
             padding: '8px 12px',
             borderRadius: 14,
-            color: '#a855f7',
+            color: isFullscreen ? '#38bdf8' : '#cbd5e1',
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
           }}
         >
-          <BookOpen style={{ width: 14, height: 14 }} />
-          <span className="hidden sm:inline">Story & Guide</span>
+          {isFullscreen ? <Minimize style={{ width: 14, height: 14 }} /> : <Maximize style={{ width: 14, height: 14 }} />}
+          <span className="hidden sm:inline">{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>
         </button>
 
         <div
@@ -1786,6 +1877,138 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
                 <span>Skip</span>
                 <SkipForward style={{ width: 12, height: 12 }} />
               </button>
+            </div>
+
+            {/* Local Theme Toggle (Per-Person / LocalStorage) */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: 8,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: theme === 'light' ? '#0f172a' : '#f8fafc' }}>
+                  Canvas Theme
+                </span>
+                <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                  {theme === 'dark' ? 'Cosmic Dark Mode' : 'Clean Light Mode'} (Local)
+                </span>
+              </div>
+              <button
+                onClick={toggleTheme}
+                title="Toggle Canvas Theme (Individual setting)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 10,
+                  background: theme === 'dark' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(245, 158, 11, 0.18)',
+                  border: theme === 'dark' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)',
+                  color: theme === 'dark' ? '#38bdf8' : '#d97706',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Moon style={{ width: 14, height: 14 }} />
+                    <span>Dark</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun style={{ width: 14, height: 14 }} />
+                    <span>Light</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Clear Board Option with Confirmation */}
+            <div
+              style={{
+                paddingTop: 8,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              {!showClearConfirm ? (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Trash2 style={{ width: 14, height: 14 }} />
+                  <span>Clear Canvas Board</span>
+                </button>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    padding: 10,
+                    borderRadius: 10,
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fca5a5', textAlign: 'center' }}>
+                    Clear all elements on the canvas?
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={handleClearCanvas}
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        borderRadius: 8,
+                        background: '#ef4444',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Yes, Clear
+                    </button>
+                    <button
+                      onClick={() => setShowClearConfirm(false)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        borderRadius: 8,
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        color: '#cbd5e1',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
