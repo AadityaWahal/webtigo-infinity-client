@@ -110,7 +110,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 interface CanvasBoardProps {
   onBackToLanding?: () => void;
-  onOpenBlog?: () => void;
+  onOpenBlog?: (tab?: 'story' | 'guide') => void;
 }
 
 export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoardProps) {
@@ -1176,7 +1176,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
         {/* Read Blog / Guide Button */}
         {onOpenBlog && (
           <button
-            onClick={onOpenBlog}
+            onClick={() => onOpenBlog('guide')}
             title="Read Founder Story & Guide"
             className="glass-surface interactive-btn"
             style={{

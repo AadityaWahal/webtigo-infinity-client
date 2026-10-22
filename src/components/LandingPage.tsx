@@ -11,18 +11,21 @@ import {
   Mic,
   Image as ImageIcon,
   Compass,
-  Zap,
   Globe2,
   ShieldCheck,
   Palette,
   PaintBucket,
-  MousePointer2,
   BookOpen,
+  PenTool,
+  Eraser,
+  Flame,
+  MousePointer,
+  HelpCircle,
 } from 'lucide-react';
 
 interface LandingPageProps {
   onEnterCanvas: () => void;
-  onOpenBlog?: () => void;
+  onOpenBlog?: (tab?: 'story' | 'guide') => void;
 }
 
 export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPageProps) {
@@ -43,7 +46,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       />
 
       {/* Top Navbar */}
-      <nav className="relative z-20 flex items-center justify-between px-6 sm:px-12 py-6 border-b border-slate-800/60 backdrop-blur-md bg-slate-900/30">
+      <nav className="relative z-20 flex items-center justify-between px-6 sm:px-12 py-5 border-b border-slate-800/60 backdrop-blur-md bg-slate-900/30">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 border border-indigo-400/40">
             <Layers className="w-6 h-6 text-white animate-pulse" />
@@ -60,19 +63,27 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs text-emerald-400 font-medium">
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs text-emerald-400 font-medium">
             <Radio className="w-3.5 h-3.5 animate-pulse" />
             <span>24/7 Global Sync Active</span>
           </div>
 
           {onOpenBlog && (
-            <button
-              onClick={onOpenBlog}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Blog & Guide</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onOpenBlog('story')}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition cursor-pointer"
+              >
+                <span>Founder's Story</span>
+              </button>
+              <button
+                onClick={() => onOpenBlog('guide')}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                <span>User Guide</span>
+              </button>
+            </div>
           )}
 
           <button
@@ -85,8 +96,8 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
         </div>
       </nav>
 
-      {/* Main Hero Section */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-16 text-center max-w-5xl mx-auto space-y-12">
+      {/* Main Content Area */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 sm:px-12 py-16 text-center max-w-5xl mx-auto space-y-16">
         {/* Futuristic Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 backdrop-blur-xl text-xs font-semibold text-indigo-300 shadow-sm animate-fade-in">
           <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -109,7 +120,7 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
         </div>
 
         {/* Central Prominent CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
             onClick={onEnterCanvas}
             className="group relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:shadow-[0_0_40px_rgba(99,102,241,0.6)] active:scale-95 text-white text-base font-bold shadow-2xl transition duration-300 cursor-pointer border border-indigo-400/40"
@@ -122,63 +133,148 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
 
           {onOpenBlog && (
             <button
-              onClick={onOpenBlog}
+              onClick={() => onOpenBlog('guide')}
               className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white text-base font-semibold transition cursor-pointer backdrop-blur-xl"
             >
               <BookOpen className="w-4 h-4 text-cyan-400" />
-              <span>Read The Story & Guide</span>
+              <span>Explore User Guide</span>
             </button>
           )}
         </div>
 
-        {/* Core Pillars Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pt-8 w-full text-left">
-          {/* Card 1: Infinite Spatial Coordinates */}
-          <div className="p-6 rounded-2xl backdrop-blur-xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition duration-300 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <Compass className="w-5 h-5" />
+        {/* --------------------------------------------------------- */}
+        {/* SHORTENED FOUNDER STORY SPOTLIGHT (The Midnight Spark)    */}
+        {/* --------------------------------------------------------- */}
+        <div className="w-full text-left p-8 sm:p-10 rounded-3xl bg-gradient-to-br from-slate-900/90 via-indigo-950/30 to-slate-900/90 border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-3 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-semibold text-cyan-300">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>The Midnight Spark • 3 AM Origin</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                "What if the whole world was an infinitely large board?"
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Most tools lock you into private invite-only rooms or fleeting vertical feeds. Endlessync was born
+                from a late-night epiphany: a truly infinite, open digital whiteboard where anyone can leave a mark,
+                collaborate across continents, and explore boundless ideas simultaneously. Originally built as
+                <em> Weptigo Infinity Canvas</em>, it has been reborn with high-velocity real-time WebSockets and AI acceleration.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-white">Spatial Teleportation</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Track your exact (X, Y) world coordinates with live HUD. Teleport directly to any
-              coordinate on the infinite grid in seconds.
-            </p>
+
+            {onOpenBlog && (
+              <button
+                onClick={() => onOpenBlog('story')}
+                className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-cyan-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+              >
+                <span>Read Full Founder's Story</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* --------------------------------------------------------- */}
+        {/* FRONT-END TOOLS & CONTROLS GUIDE (Tailored & Visual)      */}
+        {/* --------------------------------------------------------- */}
+        <div className="w-full space-y-8 text-left">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800 pb-5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                <HelpCircle className="w-4 h-4" />
+                <span>Quick Interactive Manual</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">
+                Tools & Capabilities on the Infinite Grid
+              </h2>
+            </div>
+
+            {onOpenBlog && (
+              <button
+                onClick={() => onOpenBlog('guide')}
+                className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <span>Read Complete In-Depth Guide</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Card 2: 2D Rocket Jet Mode */}
-          <div className="p-6 rounded-2xl backdrop-blur-xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition duration-300 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Rocket className="w-5 h-5" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Tool 1: Navigation & Teleport */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Compass className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">1. Infinite Pan & Teleport</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Click-and-drag or hold <strong>Spacebar</strong> to pan anywhere on the Cartesian grid.
+                The top-left HUD tracks your exact (X, Y) coordinates. Click <strong>Teleport</strong> to warp to any spot in seconds.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-white">Rocket Jet Propulsion</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Click and hold to ignite rocket thrusters. Cruise across light-years of canvas at
-              Sonic (24x) or Warp (48x) velocity.
-            </p>
-          </div>
 
-          {/* Card 3: Simulator Hub */}
-          <div className="p-6 rounded-2xl backdrop-blur-xl bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 transition duration-300 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Palette className="w-5 h-5" />
+            {/* Tool 2: Rocket Thrusters */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Flame className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">2. 2D Rocket Jet Propulsion</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Toggle the rocket icon at bottom-right. Click and hold the mouse button anywhere to fire jet thrusters.
+                Cruise across light-years of canvas at <strong>10x, 24x, or 48x warp velocities</strong>.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-white">Simulator Hub</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Radial instrument cluster with 5 satellite tools: custom brush widths, shapes,
-              transparency-controlled fill bucket, and Paint eraser.
-            </p>
-          </div>
 
-          {/* Card 4: Rich Media Ingestion */}
-          <div className="p-6 rounded-2xl backdrop-blur-xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 transition duration-300 space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-              <Mic className="w-5 h-5" />
+            {/* Tool 3: Vector Pen & Shading */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <PenTool className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">3. Vector Brushes & Shapes</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Draw zero-latency freehand vector strokes with custom widths (1px–48px). Use the geometric satellite
+                to sketch rectangles, circles, arrows, and stars with transparent or solid fills.
+              </p>
             </div>
-            <h3 className="text-sm font-bold text-white">Voice, Photos & Text</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Drop text notes, record playable voice notes directly into the canvas, and drop photos
-              for collaborative visual storytelling.
-            </p>
+
+            {/* Tool 4: Paint Eraser */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-rose-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                <Eraser className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">4. Paint-Style Precision Eraser</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Carves and trims touched strokes like MS Paint without deleting whole artworks in one touch.
+                Adjust eraser radius scale from 12px to 80px directly from the eraser satellite.
+              </p>
+            </div>
+
+            {/* Tool 5: Click-to-Paste Media Hub */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <Mic className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">5. Click-to-Paste Media Hub</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Click the bottom-left (+) button to type text notes, record voice notes with MediaRecorder, or upload photos.
+                A plus (+) stamp cursor appears: simply click anywhere on the canvas to place your item.
+              </p>
+            </div>
+
+            {/* Tool 6: Public Commons Etiquette */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Globe2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">6. Global Commons Etiquette</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                There are no locked rooms or passwords—the canvas is a shared collective mural. Expand on existing
+                doodles, layer notes collaboratively, and build mind maps together in real-time.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -211,12 +307,21 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
       <footer className="relative z-20 py-6 border-t border-slate-800/60 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-3">
         <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
         {onOpenBlog && (
-          <button
-            onClick={onOpenBlog}
-            className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
-          >
-            Read Story & Guide →
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => onOpenBlog('story')}
+              className="text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              Founder's Story
+            </button>
+            <span className="text-slate-700">•</span>
+            <button
+              onClick={() => onOpenBlog('guide')}
+              className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
+            >
+              Official User Guide →
+            </button>
+          </div>
         )}
       </footer>
     </div>
