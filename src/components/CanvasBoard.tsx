@@ -2156,52 +2156,6 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           pointerEvents: 'none',
         }}
       >
-        {/* Floating Quick Media & Games Bar */}
-        <div className="quick-dock interactive" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <button
-            onClick={() => {
-              setActiveTool('text');
-              setActiveMediaModal('text');
-            }}
-            className="quick-dock-btn"
-            title="Pin Text Note"
-          >
-            <Type style={{ width: 13, height: 13, color: '#38bdf8' }} />
-            <span>Text</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMediaModal('image')}
-            className="quick-dock-btn"
-            title="Drop Image or Photo"
-          >
-            <ImageIcon style={{ width: 13, height: 13, color: '#10b981' }} />
-            <span>Photo</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMediaModal('audio')}
-            className="quick-dock-btn"
-            title="Record Voice Memo"
-          >
-            <Mic style={{ width: 13, height: 13, color: '#f43f5e' }} />
-            <span>Voice</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMediaModal('game')}
-            className="quick-dock-btn"
-            title="2D Board Games (Tic-Tac-Toe, Dots & Boxes, Connect 4)"
-            style={{
-              borderColor: 'rgba(245, 158, 11, 0.5)',
-              background: 'rgba(245, 158, 11, 0.15)',
-              color: '#fbbf24',
-            }}
-          >
-            <Gamepad2 style={{ width: 14, height: 14, color: '#f59e0b' }} />
-            <span>2D Games</span>
-          </button>
-        </div>
 
         {/* 1. Inline Text Creation Modal */}
         {activeMediaModal === 'text' && (
