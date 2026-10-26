@@ -44,12 +44,28 @@ import {
   Trash2,
   Maximize,
   Minimize,
+  Gamepad2,
+  Trophy,
+  Dices,
+  RotateCcw,
+  Upload,
+  Link as LinkIcon,
 } from 'lucide-react';
+import {
+  GameElementData,
+  GameHoverTarget,
+  createGameElement,
+  isPointInsideGame,
+  getGameActionAtPoint,
+  executeGameMove,
+  renderGameElement,
+} from '@/lib/gameBoard';
+import { playClickSound } from '@/lib/soundEffects';
 
 // -------------------------------------------------------------
 // Data Types
 // -------------------------------------------------------------
-type ActiveTool = 'pen' | 'eraser' | 'shape' | 'fill' | 'pan' | 'text' | 'image' | 'audio';
+type ActiveTool = 'pen' | 'eraser' | 'shape' | 'fill' | 'pan' | 'text' | 'image' | 'audio' | 'game';
 type ShapeType = 'rect' | 'circle' | 'line' | 'arrow' | 'star';
 
 interface Point {
@@ -59,7 +75,7 @@ interface Point {
 
 export interface CanvasElement {
   id: string;
-  type: 'stroke' | 'shape' | 'text' | 'image' | 'audio';
+  type: 'stroke' | 'shape' | 'text' | 'image' | 'audio' | 'game';
   points?: Point[];
   shapeType?: ShapeType;
   startX?: number;
@@ -80,6 +96,7 @@ export interface CanvasElement {
   src?: string; // Image or Audio data URL
   title?: string;
   duration?: number;
+  gameData?: GameElementData;
 }
 
 // -------------------------------------------------------------
@@ -232,13 +249,38 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
   // Bottom-Left Media Ingestion Hub State (Text, Audio, Photo)
   // -----------------------------------------------------------
   const [isMediaHubOpen, setIsMediaHubOpen] = useState(false);
-  const [activeMediaModal, setActiveMediaModal] = useState<'text' | 'audio' | null>(null);
+  const [activeMediaModal, setActiveMediaModal] = useState<'text' | 'image' | 'audio' | 'game' | null>(null);
   const [textInputVal, setTextInputVal] = useState('');
+  const [textFontSize, setTextFontSize] = useState<number>(18);
   const [pendingTextPos, setPendingTextPos] = useState<Point | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState('');
 
-  // Pending Placement State (Click to paste text, photo, or audio note)
+  // 2D Board Game Configuration State
+  const [gameTab, setGameTab] = useState<'tictactoe' | 'dotsboxes' | 'connect4'>('tictactoe');
+  const [gameDotsSize, setGameDotsSize] = useState<number>(4); // 3, 4, 5, 6
+  const [gameMode, setGameMode] = useState<'pass-and-play' | 'multiplayer'>('pass-and-play');
+  const [gameStartingTurn, setGameStartingTurn] = useState<string>('O');
+  const [gameToastMessage, setGameToastMessage] = useState<string | null>(null);
+
+  // Game Hover & Client ID Tracking
+  const [hoveredGameTarget, setHoveredGameTarget] = useState<GameHoverTarget | null>(null);
+  const hoveredGameTargetRef = useRef<GameHoverTarget | null>(null);
+  const myClientIdRef = useRef<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      let cid = sessionStorage.getItem('endlessync_client_id');
+      if (!cid) {
+        cid = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        sessionStorage.setItem('endlessync_client_id', cid);
+      }
+      myClientIdRef.current = socket.id || cid;
+    }
+  }, [isConnected]);
+
+  // Pending Placement State (Click to paste text, photo, audio note, or board game)
   const [pendingPlacement, setPendingPlacement] = useState<{
-    type: 'text' | 'image' | 'audio';
+    type: 'text' | 'image' | 'audio' | 'game';
     text?: string;
     fontSize?: number;
     color?: string;
@@ -247,6 +289,9 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     height?: number;
     duration?: number;
     title?: string;
+    gameType?: 'tictactoe' | 'dotsboxes' | 'connect4';
+    dotGridSize?: number;
+    gameMode?: 'pass-and-play' | 'multiplayer';
   } | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
 
@@ -765,6 +810,17 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
         ctx.fillStyle = '#94a3b8';
         ctx.fillText(isPlaying ? 'Playing...' : `${el.duration || 5}s • Click to Play`, el.x + 46, el.y + 36);
       }
+      // 6. Interactive 2D Board Games (Tic-Tac-Toe, Dots & Boxes, Connect 4)
+      else if (el.type === 'game' && el.gameData) {
+        renderGameElement(
+          ctx,
+          el,
+          isLight,
+          zoom,
+          hoveredGameTargetRef.current,
+          myClientIdRef.current || socket.id || ''
+        );
+      }
 
       ctx.restore();
     });
@@ -1024,7 +1080,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
             next.push(el);
           }
         }
-        // Text, Photo, or Audio
+        // Text, Photo, Audio, or Game Board
         else if (
           (el.type === 'text' || el.type === 'image' || el.type === 'audio') &&
           el.x !== undefined &&
@@ -1036,6 +1092,9 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           } else {
             next.push(el);
           }
+        } else if (el.type === 'game' && isPointInsideGame(el, point.x, point.y)) {
+          anyErased = true;
+          socket.emit('element:erase', el.id);
         } else {
           next.push(el);
         }
@@ -1056,6 +1115,8 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
         } else if (el.type === 'audio' && el.x !== undefined && el.y !== undefined) {
           return point.x >= el.x && point.x <= el.x + 180 && point.y >= el.y && point.y <= el.y + 48;
+        } else if (el.type === 'game' && isPointInsideGame(el, point.x, point.y)) {
+          return true;
         }
         return false;
       }) || null
@@ -1132,6 +1193,16 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           duration: pendingPlacement.duration || 0,
           title: pendingPlacement.title || 'Voice Note',
         };
+      } else if (pendingPlacement.type === 'game') {
+        newElement = createGameElement(
+          pendingPlacement.gameType || 'tictactoe',
+          worldPoint.x,
+          worldPoint.y,
+          {
+            dotGridSize: pendingPlacement.dotGridSize,
+            mode: pendingPlacement.gameMode,
+          }
+        ) as CanvasElement;
       } else {
         setPendingPlacement(null);
         return;
@@ -1141,12 +1212,49 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       socket.emit('element:add', newElement);
       setPendingPlacement(null);
       isInteracting.current = false;
+      playClickSound();
       return;
     }
 
     if (isRocketMode) {
       isRocketClickActive.current = true;
       setIsThrusting(true);
+      return;
+    }
+
+    // Check if clicked inside an interactive 2D Board Game area
+    const clickedGame = elementsRef.current.find(
+      (el) => el.type === 'game' && isPointInsideGame(el, worldPoint.x, worldPoint.y)
+    );
+    if (clickedGame && clickedGame.gameData) {
+      const actionTarget = getGameActionAtPoint(clickedGame, worldPoint.x, worldPoint.y);
+      if (actionTarget) {
+        if (actionTarget.action === 'delete') {
+          setElements((prev) => prev.filter((el) => el.id !== clickedGame.id));
+          socket.emit('element:erase', clickedGame.id);
+          playClickSound();
+        } else {
+          const result = executeGameMove(
+            clickedGame.gameData,
+            actionTarget,
+            myClientIdRef.current || socket.id || 'player'
+          );
+          if (result.message) {
+            setGameToastMessage(result.message);
+            setTimeout(() => setGameToastMessage(null), 3500);
+          }
+          playClickSound();
+          const updatedGame: CanvasElement = {
+            ...clickedGame,
+            gameData: result.updated,
+          };
+          setElements((prev) =>
+            prev.map((el) => (el.id === clickedGame.id ? updatedGame : el))
+          );
+          socket.emit('element:add', updatedGame);
+        }
+      }
+      isInteracting.current = false;
       return;
     }
 
@@ -1238,6 +1346,21 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     }
     const worldPoint = screenToWorld(e.clientX, e.clientY);
     setCursorWorldPos(worldPoint);
+
+    // Update game hover target for live preview line/cell
+    if (!isInteracting.current && !pendingPlacement) {
+      const hoveredGame = elementsRef.current.find(
+        (el) => el.type === 'game' && isPointInsideGame(el, worldPoint.x, worldPoint.y)
+      );
+      if (hoveredGame) {
+        const target = getGameActionAtPoint(hoveredGame, worldPoint.x, worldPoint.y);
+        hoveredGameTargetRef.current = target;
+        setHoveredGameTarget(target);
+      } else if (hoveredGameTargetRef.current) {
+        hoveredGameTargetRef.current = null;
+        setHoveredGameTarget(null);
+      }
+    }
 
     if (!isInteracting.current) return;
 
@@ -1417,7 +1540,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       type: 'text',
       text: textInputVal.trim(),
       color: currentColor,
-      fontSize: 18,
+      fontSize: textFontSize || 18,
     });
     setTextInputVal('');
     setActiveMediaModal(null);
@@ -1425,7 +1548,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
     setActiveTool('pan');
   };
 
-  // 2. Photo / Image Upload -> Prepare for Click-to-Paste
+  // 2. Photo / Image Upload & URL Ingestion -> Prepare for Click-to-Paste
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1436,14 +1559,42 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
       setPendingPlacement({
         type: 'image',
         src: dataUrl,
-        width: 240,
-        height: 180,
+        width: 260,
+        height: 200,
       });
+      setActiveMediaModal(null);
       setIsMediaHubOpen(false);
       setActiveTool('pan');
     };
     reader.readAsDataURL(file);
     e.target.value = ''; // Reset input
+  };
+
+  const handleSaveImageUrl = () => {
+    if (!imageUrlInput.trim()) return;
+    setPendingPlacement({
+      type: 'image',
+      src: imageUrlInput.trim(),
+      width: 260,
+      height: 200,
+    });
+    setImageUrlInput('');
+    setActiveMediaModal(null);
+    setIsMediaHubOpen(false);
+    setActiveTool('pan');
+  };
+
+  // 3. Board Game Selection -> Prepare for Click-to-Paste
+  const handleSaveGameBoard = () => {
+    setPendingPlacement({
+      type: 'game',
+      gameType: gameTab,
+      dotGridSize: gameDotsSize,
+      gameMode: gameMode,
+    });
+    setActiveMediaModal(null);
+    setIsMediaHubOpen(false);
+    setActiveTool('pan');
   };
 
   // 3. Audio Recording -> Prepare for Click-to-Paste
@@ -2005,7 +2156,54 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           pointerEvents: 'none',
         }}
       >
-        {/* Inline Text Creation Modal */}
+        {/* Floating Quick Media & Games Bar */}
+        <div className="quick-dock interactive" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <button
+            onClick={() => {
+              setActiveTool('text');
+              setActiveMediaModal('text');
+            }}
+            className="quick-dock-btn"
+            title="Pin Text Note"
+          >
+            <Type style={{ width: 13, height: 13, color: '#38bdf8' }} />
+            <span>Text</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMediaModal('image')}
+            className="quick-dock-btn"
+            title="Drop Image or Photo"
+          >
+            <ImageIcon style={{ width: 13, height: 13, color: '#10b981' }} />
+            <span>Photo</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMediaModal('audio')}
+            className="quick-dock-btn"
+            title="Record Voice Memo"
+          >
+            <Mic style={{ width: 13, height: 13, color: '#f43f5e' }} />
+            <span>Voice</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMediaModal('game')}
+            className="quick-dock-btn"
+            title="2D Board Games (Tic-Tac-Toe, Dots & Boxes, Connect 4)"
+            style={{
+              borderColor: 'rgba(245, 158, 11, 0.5)',
+              background: 'rgba(245, 158, 11, 0.15)',
+              color: '#fbbf24',
+            }}
+          >
+            <Gamepad2 style={{ width: 14, height: 14, color: '#f59e0b' }} />
+            <span>2D Games</span>
+          </button>
+        </div>
+
+        {/* 1. Inline Text Creation Modal */}
         {activeMediaModal === 'text' && (
           <div
             className="glass-popover interactive"
@@ -2013,7 +2211,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
               marginBottom: 12,
               padding: 16,
               borderRadius: 18,
-              width: 280,
+              width: 300,
               display: 'flex',
               flexDirection: 'column',
               gap: 10,
@@ -2030,6 +2228,35 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
                 <X style={{ width: 14, height: 14 }} />
               </button>
             </div>
+
+            {/* Font Size Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, color: '#94a3b8' }}>Size:</span>
+              {[
+                { label: 'Small', size: 14 },
+                { label: 'Medium', size: 18 },
+                { label: 'Large', size: 26 },
+                { label: 'Header', size: 36 },
+              ].map((s) => (
+                <button
+                  key={s.label}
+                  onClick={() => setTextFontSize(s.size)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    border: textFontSize === s.size ? '1px solid #38bdf8' : '1px solid #374151',
+                    background: textFontSize === s.size ? 'rgba(56, 189, 248, 0.2)' : '#1f2937',
+                    color: textFontSize === s.size ? '#38bdf8' : '#94a3b8',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
             <textarea
               autoFocus
               rows={3}
@@ -2048,6 +2275,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
                 resize: 'none',
               }}
             />
+
             <button
               onClick={handleSaveTextNote}
               style={{
@@ -2066,7 +2294,97 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           </div>
         )}
 
-        {/* Audio Recording Modal */}
+        {/* 2. Photo / Image Ingestion Modal */}
+        {activeMediaModal === 'image' && (
+          <div
+            className="glass-popover interactive"
+            style={{
+              marginBottom: 12,
+              padding: 16,
+              borderRadius: 18,
+              width: 300,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ImageIcon style={{ width: 14, height: 14, color: '#10b981' }} /> Add Image / Photo
+              </span>
+              <button
+                onClick={() => setActiveMediaModal(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+
+            {/* Upload File Button */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '10px 0',
+                borderRadius: 10,
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#34d399',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Upload style={{ width: 15, height: 15 }} />
+              <span>Browse Local Photo / File</span>
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+              <span style={{ fontSize: 10, color: '#64748b' }}>OR PASTE URL</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="text"
+                placeholder="https://example.com/photo.jpg"
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  background: '#111827',
+                  border: '1px solid #374151',
+                  color: '#fff',
+                  fontSize: 11,
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleSaveImageUrl}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Place
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 3. Audio Recording Modal */}
         {activeMediaModal === 'audio' && (
           <div
             className="glass-popover interactive"
@@ -2074,7 +2392,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
               marginBottom: 12,
               padding: 16,
               borderRadius: 18,
-              width: 280,
+              width: 290,
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
@@ -2095,7 +2413,7 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
               </button>
             </div>
 
-            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
               {isRecording ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                   <div className="flex items-center gap-1.5 h-6">
@@ -2153,6 +2471,182 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
           </div>
         )}
 
+        {/* 4. 2D Board Games Modal */}
+        {activeMediaModal === 'game' && (
+          <div
+            className="glass-popover interactive"
+            style={{
+              marginBottom: 12,
+              padding: 16,
+              borderRadius: 20,
+              width: 320,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Gamepad2 style={{ width: 16, height: 16, color: '#f59e0b' }} /> 2D Board Games
+              </span>
+              <button
+                onClick={() => setActiveMediaModal(null)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+
+            {/* Game Tab Selector */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              {[
+                { id: 'tictactoe', label: '⭕❌ Tic-Tac-Toe' },
+                { id: 'dotsboxes', label: '🔲 Dots & Boxes' },
+                { id: 'connect4', label: '🔴 Connect 4' },
+              ].map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => setGameTab(g.id as any)}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: 10,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: gameTab === g.id ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                    background: gameTab === g.id ? 'rgba(245, 158, 11, 0.25)' : 'rgba(15, 23, 42, 0.7)',
+                    color: gameTab === g.id ? '#fbbf24' : '#94a3b8',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                  }}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Game Specific Options */}
+            {gameTab === 'tictactoe' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
+                <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                  Classic 3x3 game. Alternating turns! When a player wins, the game area raises and transforms into a victory inscription.
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: '#94a3b8' }}>First Move:</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['O', 'X'].map((sym) => (
+                      <button
+                        key={sym}
+                        onClick={() => setGameStartingTurn(sym)}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          border: gameStartingTurn === sym ? '1px solid #38bdf8' : '1px solid #374151',
+                          background: gameStartingTurn === sym ? 'rgba(56, 189, 248, 0.2)' : '#1f2937',
+                          color: sym === 'O' ? '#38bdf8' : '#ec4899',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {sym === 'O' ? '⭕ Circle' : '❌ Cross'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {gameTab === 'dotsboxes' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
+                <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                  Connect lines between dots. Completing a 1x1 square claims it with your letter ('A' or 'B') and grants 1 point!
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: '#94a3b8' }}>Dot Grid:</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[3, 4, 5, 6].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setGameDotsSize(s)}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          border: gameDotsSize === s ? '1px solid #c084fc' : '1px solid #374151',
+                          background: gameDotsSize === s ? 'rgba(192, 132, 252, 0.25)' : '#1f2937',
+                          color: gameDotsSize === s ? '#c084fc' : '#94a3b8',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {s}x{s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span style={{ fontSize: 10, color: '#f59e0b' }}>
+                  ⚡ Grid capped at 6x6 max as requested to ensure lightning-fast canvas physics!
+                </span>
+              </div>
+            )}
+
+            {gameTab === 'connect4' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
+                <span style={{ fontSize: 11, color: '#cbd5e1' }}>
+                  7x6 grid with simulated gravity drop physics. First to line up 4 tokens wins!
+                </span>
+              </div>
+            )}
+
+            {/* Mode Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11 }}>
+              <span style={{ color: '#94a3b8' }}>Mode:</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  { id: 'pass-and-play', label: '👥 Pass & Play' },
+                  { id: 'multiplayer', label: '🌐 Multi Lock' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setGameMode(m.id as any)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      border: gameMode === m.id ? '1px solid #10b981' : '1px solid #374151',
+                      background: gameMode === m.id ? 'rgba(16, 185, 129, 0.2)' : '#1f2937',
+                      color: gameMode === m.id ? '#34d399' : '#94a3b8',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Spawn Game Button */}
+            <button
+              onClick={handleSaveGameBoard}
+              style={{
+                marginTop: 4,
+                padding: '10px 0',
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                border: 'none',
+                color: '#0f172a',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 18px rgba(245, 158, 11, 0.35)',
+              }}
+            >
+              🚀 Place Board Game on Canvas
+            </button>
+          </div>
+        )}
+
         {/* Media Hub Trigger & Satellites */}
         <div className="media-container interactive">
           {/* Satellite 1: Text */}
@@ -2196,8 +2690,8 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
 
           {/* Satellite 3: Photo Upload */}
           <button
-            onClick={() => imageInputRef.current?.click()}
-            title="Drop Image Photo"
+            onClick={() => setActiveMediaModal('image')}
+            title="Drop Image or Photo"
             className={`media-satellite-btn media-sat-3 glass-surface ${!isMediaHubOpen ? 'media-sat-closed' : ''}`}
             style={{
               width: 42,
@@ -2212,10 +2706,28 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
             <ImageIcon style={{ width: 17, height: 17 }} />
           </button>
 
+          {/* Satellite 4: 2D Board Games */}
+          <button
+            onClick={() => setActiveMediaModal('game')}
+            title="2D Board Games (Tic-Tac-Toe, Dots & Boxes, Connect 4)"
+            className={`media-satellite-btn media-sat-4 glass-surface ${!isMediaHubOpen ? 'media-sat-closed' : ''}`}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f59e0b',
+            }}
+          >
+            <Gamepad2 style={{ width: 18, height: 18 }} />
+          </button>
+
           {/* Main Media Hub Plus Button */}
           <button
             onClick={() => setIsMediaHubOpen(!isMediaHubOpen)}
-            title="Attach Media (Text, Voice, Photos)"
+            title="Add Media & Board Games (Text, Voice, Photos, 2D Games)"
             className="interactive-btn"
             style={{
               position: 'relative',
@@ -2923,7 +3435,13 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
                     ? 'Text Note'
                     : pendingPlacement.type === 'image'
                     ? 'Photo'
-                    : 'Voice Note'}
+                    : pendingPlacement.type === 'audio'
+                    ? 'Voice Note'
+                    : pendingPlacement.gameType === 'dotsboxes'
+                    ? 'Dots & Boxes Board'
+                    : pendingPlacement.gameType === 'connect4'
+                    ? 'Connect Four Board'
+                    : 'Tic-Tac-Toe Board'}
                 </span>
               </span>
             </div>
@@ -2971,16 +3489,63 @@ export default function CanvasBoard({ onBackToLanding, onOpenBlog }: CanvasBoard
             >
               <Plus style={{ width: 14, height: 14, color: '#38bdf8' }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: '#f8fafc' }}>
-                Click to paste{' '}
+                Click to place{' '}
                 {pendingPlacement.type === 'text'
                   ? 'Text Note'
                   : pendingPlacement.type === 'image'
                   ? 'Photo'
-                  : 'Voice Note'}
+                  : pendingPlacement.type === 'audio'
+                  ? 'Voice Note'
+                  : pendingPlacement.gameType === 'dotsboxes'
+                  ? 'Dots & Boxes Game'
+                  : pendingPlacement.gameType === 'connect4'
+                  ? 'Connect Four Game'
+                  : 'Tic-Tac-Toe Game'}
               </span>
             </div>
           </div>
         </>
+      )}
+
+      {/* Game Toast Alert (Turn Enforcement & Notifications) */}
+      {gameToastMessage && (
+        <div
+          className="dock-top-center interactive"
+          style={{
+            position: 'fixed',
+            top: 76,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 95,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 22px',
+            borderRadius: 30,
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1px solid rgba(245, 158, 11, 0.7)',
+            boxShadow: '0 0 30px rgba(245, 158, 11, 0.35)',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 600,
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          <Gamepad2 style={{ width: 16, height: 16, color: '#fbbf24' }} />
+          <span>{gameToastMessage}</span>
+          <button
+            onClick={() => setGameToastMessage(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              marginLeft: 6,
+            }}
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
       )}
 
       {/* ----------------------------------------------------------- */}

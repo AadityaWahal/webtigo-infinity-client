@@ -68,6 +68,12 @@ declare module 'lucide-react' {
   export const Trash2: LucideIcon;
   export const Maximize: LucideIcon;
   export const Minimize: LucideIcon;
+  export const Gamepad2: LucideIcon;
+  export const Trophy: LucideIcon;
+  export const Dices: LucideIcon;
+  export const RotateCcw: LucideIcon;
+  export const Upload: LucideIcon;
+  export const Link: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };
   export default icons;
