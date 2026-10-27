@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Layers as LayersIcon,
   Eraser,
+  Gamepad2,
+  Trophy,
 } from 'lucide-react';
 
 interface BlogGuideProps {
@@ -332,6 +334,137 @@ export default function BlogGuide({
                 <p>
                   It's a giant open space for anyone to drop in a line or a drawing, post a photo or just see what
                   others are creating around the world. It's designed to be simple, open, and totally collaborative.
+                </p>
+              </div>
+
+              <hr className="border-slate-800 my-8" />
+
+              {/* Subheading 5: How Games Came to Endlessync (Verbatim) */}
+              <div className="space-y-6">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                  <span className="w-2 h-7 rounded-full bg-pink-500 inline-block" />
+                  How Games Came to Endlessync
+                </h2>
+
+                <p>
+                  It started late one evening when my brother and I were testing Endlessync.
+                </p>
+
+                <p>
+                  I had the real-time canvas open and was checking a few things: how quickly strokes appeared, whether cursors stayed in sync, and how well the WebSocket connection handled everything happening on the board. My brother joined from his own screen to help me test it. For a while, we did what you'd expect during a testing session. We drew random lines, kept hitting the erase button, moved our cursors around, and tried to see where things would break.
+                </p>
+
+                <p>
+                  Somewhere along the way, things took an unexpected turn.
+                </p>
+
+                <p>
+                  One of us drew a few lines and made a 3×3 grid. A circle appeared in the middle, followed by an X in the top-right corner. Just like that, we were playing Tic-Tac-Toe.
+                </p>
+
+                <p>
+                  What was supposed to be a technical testing session had turned into a proper game. We stopped paying attention to latency and started focusing on our next moves. Every turn became about blocking the other person, spotting an opening, or setting up a win. Neither of us needed to say much. We were just playing.
+                </p>
+
+                <p>
+                  When the board filled up, we didn't erase it and start over. We moved across the canvas, drew another grid, and played again.
+                </p>
+
+                <p>
+                  It was a small thing, but it got me thinking. I'd been looking at Endlessync mainly as a tool for collaboration, something people could use for wireframes, diagrams, brainstorming, and notes. But that evening made me realize there was another side to it.
+                </p>
+
+                <p>
+                  An infinite canvas gives people room to do pretty much anything. They can sketch ideas, doodle while talking, or mess around with whatever comes to mind. Sometimes, people don't need another productivity feature. They just need a reason to interact with each other. And if you've ever tried drawing a neat game board with a mouse or trackpad, you know it gets annoying pretty quickly.
+                </p>
+
+                <p>
+                  That's where the idea for a Games feature came from.
+                </p>
+
+                <p>
+                  I started wondering what it would be like if people could add a game board to the canvas with a single click. No drawing grids by hand, no setting things up from scratch. Just pick a game and start playing.
+                </p>
+
+                <p>
+                  It could be a fun way for friends to spend time together remotely, or for teammates to take a break between brainstorming sessions. Someone could open a game right next to their notes or project board, play a quick round, and get back to work whenever they wanted. The canvas wouldn't have to be just a place where people got things done. It could also be a place where they hung out.
+                </p>
+
+                <p>
+                  Once I had the idea, I started using AI to brainstorm games that might work well on an infinite, shared 2D canvas. I wanted to keep things simple. The games had to be easy to understand, quick to get into, and enjoyable to play with other people. They also needed to work naturally with the way Endlessync was built.
+                </p>
+
+                <p>
+                  I kept three things in mind:
+                </p>
+
+                <ul className="space-y-2 list-disc pl-5 text-slate-300">
+                  <li>
+                    <strong>Simple 2D gameplay.</strong> Games that used grids, dots, lines, or basic shapes would be the easiest to bring onto the canvas.
+                  </li>
+                  <li>
+                    <strong>Easy to pick up.</strong> I wanted games that people could start playing almost immediately, without having to learn a bunch of rules first.
+                  </li>
+                  <li>
+                    <strong>Room to play anywhere.</strong> Since the canvas was infinite, games shouldn't be restricted to one screen. People could have several boards spread out across the same workspace and move between them freely.
+                  </li>
+                </ul>
+
+                <p>
+                  A few ideas stood out pretty quickly.
+                </p>
+
+                <div className="space-y-4 pt-2">
+                  <h3 className="text-xl font-bold text-white">Connect Four (Four-in-a-Row)</h3>
+                  <p>
+                    This was one of the first games that came to mind. The rules are simple, most people already know how to play, and the board is easy to represent on a canvas. Players could drop their tokens into the grid and start competing right away. It was the kind of game that didn't need much explanation.
+                  </p>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <h3 className="text-xl font-bold text-white">Dots and Boxes</h3>
+                  <p>
+                    I liked this one because it felt so closely connected to what Endlessync already did. It's the classic game where players take turns drawing lines between dots, trying to complete squares and claim them. The entire game revolves around drawing, so bringing it to a collaborative canvas felt like a natural fit.
+                  </p>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <h3 className="text-xl font-bold text-white">Battleship and Grid Mazes</h3>
+                  <p>
+                    These ideas opened up a few more possibilities. Battleship could let players place their fleets on coordinate grids and try to guess where their opponent had hidden them. Grid mazes could let one person create a path while another tried to find their way through it. Both ideas made use of the canvas in a slightly different way and gave players more room to experiment.
+                  </p>
+                </div>
+
+                <p>
+                  The more I thought about these games, the more I liked the direction Endlessync could take. Adding game boards wasn't just about giving users a few extra things to click on. It was about changing how people might use the canvas in the first place.
+                </p>
+
+                <p>
+                  Most collaborative tools are built around a task. You open them because you have something to plan, design, discuss, or organize. But people don't always want to be productive every second they're together. Sometimes they want to take a break, joke around, or do something spontaneous.
+                </p>
+
+                <p>
+                  I wanted Endlessync to leave room for that, too.
+                </p>
+
+                <p>
+                  With ready-made games, the canvas could become a shared space where work and play could happen side by side. Someone could be sketching out an idea while another person starts a quick game nearby. Friends could use it to hang out, and teammates could use it to unwind between tasks. The infinite canvas made all of this feel possible without forcing everything into a separate screen or experience.
+                </p>
+
+                <p>
+                  Looking back, the idea came from something pretty ordinary. My brother and I were testing a feature, got distracted by a game of Tic-Tac-Toe, and ended up having more fun than we'd expected.
+                </p>
+
+                <p>
+                  Neither of us had planned it. We just saw an empty space, drew a few lines, and started playing.
+                </p>
+
+                <p>
+                  But that moment made me think about what Endlessync could be beyond its original purpose. It could still be a place to work together, but it could also be a place to spend time together.
+                </p>
+
+                <p>
+                  And that's what I wanted the Games feature to bring to the canvas: a simple way for people to stop what they're doing for a moment, play something together, and enjoy the space they're already sharing.
                 </p>
               </div>
 
@@ -659,6 +792,119 @@ export default function BlogGuide({
                     </li>
                     <li>
                       <strong>Native Fullscreen Immersion:</strong> Auto-triggers full viewport mode when entering the canvas or pressing the Fullscreen toggle button, hiding address and browser chrome. Simply press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-300 text-xs">ESC</kbd> or click the Fullscreen button anytime to exit.
+                    </li>
+                  </ul>
+                </div>
+              </section>
+
+              <hr className="border-slate-800 my-8" />
+
+              {/* 7. 2D Board Games, Area Physics & Turn Engine */}
+              <section className="space-y-6">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                  <span className="w-2 h-7 rounded-full bg-pink-500 inline-block" />
+                  7. 2D Board Games, Area Physics & Turn Engine
+                </h2>
+                <p>
+                  Endlessync transforms from a collaborative whiteboard into an interactive arcade with built-in, zero-latency 2D board games. 
+                  Every board features localized area physics, touch-accurate hitboxes, real-time multiplayer state synchronization, and Pass & Play versatility.
+                </p>
+
+                {/* Spawning & Placement */}
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Gamepad2 className="w-5 h-5 text-pink-400" />
+                    How to Spawn and Place Games
+                  </h3>
+                  <ol className="space-y-3 text-sm text-slate-300 list-decimal pl-5">
+                    <li>
+                      <strong>Open the Creation Hub:</strong> Click the floating Plus (<kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-300 text-xs">+</kbd>) button in the bottom-left corner of the canvas.
+                    </li>
+                    <li>
+                      <strong>Select 2D Games:</strong> In the satellite arc, click the Gamepad icon (<span className="text-pink-400 font-semibold">2D Games</span>) to open the game launcher dialog.
+                    </li>
+                    <li>
+                      <strong>Configure Your Match:</strong>
+                      <ul className="mt-2 space-y-1.5 list-disc pl-5 text-xs text-slate-400">
+                        <li>Choose your game: <strong>Tic-Tac-Toe</strong>, <strong>Dots &amp; Boxes</strong>, or <strong>Connect Four</strong>.</li>
+                        <li>Toggle <strong>Multiplayer Lock</strong>: Turn ON for competitive turns across connected players (Player 1 claims first move, Player 2 joins on the next turn), or turn OFF for local <em>Pass &amp; Play</em>.</li>
+                        <li>For Dots &amp; Boxes, customize grid dimensions from <strong>3×3 up to 6×6</strong>.</li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong>Stamp on Canvas:</strong> Click <em>"Place Game Board"</em>. A floating target stamp cursor appears. Click anywhere on the infinite canvas to drop your game board precisely at those coordinates.
+                    </li>
+                  </ol>
+                </div>
+
+                {/* Game 1: Tic-Tac-Toe */}
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-amber-400" />
+                      1. Tic-Tac-Toe (3×3 Classic)
+                    </h3>
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 font-medium">Quick 2-Player Match</span>
+                  </div>
+                  <ul className="space-y-2.5 text-sm text-slate-300 list-disc pl-5">
+                    <li><strong>Objective:</strong> Form an unbroken row, column, or diagonal of 3 matching symbols.</li>
+                    <li><strong>Gameplay:</strong> Player 1 places glowing Cyan <strong>X</strong>s; Player 2 counters with vibrant Pink <strong>O</strong>s.</li>
+                    <li><strong>Turn Physics:</strong> Moves lock immediately upon clicking an empty cell. When a winning line forms, an animated strike banner and celebration overlay triggers live for all observers.</li>
+                    <li><strong>Instant Rematch:</strong> Click the Reset button at the top header of the board to clear the grid for another round.</li>
+                  </ul>
+                </div>
+
+                {/* Game 2: Dots & Boxes */}
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <LayersIcon className="w-5 h-5 text-indigo-400" />
+                      2. Dots & Boxes (Tactical Territory Claim)
+                    </h3>
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium">3×3 to 6×6 Grids</span>
+                  </div>
+                  <ul className="space-y-2.5 text-sm text-slate-300 list-disc pl-5">
+                    <li><strong>Objective:</strong> Complete the 4th border of any square cell to claim it, earn points, and take another turn!</li>
+                    <li><strong>Hover & Line Snapping:</strong> Move your cursor between any two adjacent dots; an intuitive snap-line highlights. Click to draw a permanent border.</li>
+                    <li><strong>Bonus Turn Mechanics:</strong> Completing a box fills it with your player color and awards 1 point. In true classic rules, completing a box grants an immediate consecutive turn.</li>
+                    <li><strong>Endgame:</strong> Once all boxes are enclosed, the player with the highest tally claims victory with celebratory ribbons.</li>
+                  </ul>
+                </div>
+
+                {/* Game 3: Connect Four */}
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-rose-400" />
+                      3. Connect Four (7×6 Gravity Grid)
+                    </h3>
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-300 font-medium">Vertical Gravity Drops</span>
+                  </div>
+                  <ul className="space-y-2.5 text-sm text-slate-300 list-disc pl-5">
+                    <li><strong>Objective:</strong> Line up 4 consecutive tokens horizontally, vertically, or diagonally before your opponent.</li>
+                    <li><strong>Gravity Physics:</strong> Click anywhere within a column. The token automatically falls down to the lowest unoccupied slot in that column.</li>
+                    <li><strong>Strategic Blocking:</strong> Keep track of diagonal openings and column caps. When four connect, the winning sequence pulses with gold neon halos.</li>
+                  </ul>
+                </div>
+
+                {/* Area Physics & Co-existence */}
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                    Area Physics, Dragging & Canvas Co-existence
+                  </h3>
+                  <ul className="space-y-2.5 text-sm text-slate-300 list-disc pl-5">
+                    <li>
+                      <strong>Isolated Area Hitboxes:</strong> Clicking inside a game board interacts exclusively with the game mechanics—it will never trigger accidental freehand pen strokes or eraser wipes across the playing surface.
+                    </li>
+                    <li>
+                      <strong>Drag to Relocate:</strong> Click and drag the board's title header bar to move the entire game anywhere on the infinite canvas.
+                    </li>
+                    <li>
+                      <strong>Multiple Games in Parallel:</strong> Because the canvas is boundless, you can place a Tic-Tac-Toe tournament in one sector, a Connect 4 board beside your team notes, and a 6×6 Dots &amp; Boxes board across the galaxy.
+                    </li>
+                    <li>
+                      <strong>Clean Removal:</strong> Press the red trash icon in the board header to remove the board whenever you are finished.
                     </li>
                   </ul>
                 </div>

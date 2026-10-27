@@ -32,6 +32,7 @@ import {
   Share2,
   Check,
   Music,
+  Gamepad2,
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -339,6 +340,18 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
               <p className="text-xs text-slate-300 leading-relaxed">
                 Switch between Cosmic Dark and Clean Light mode independently without altering anyone else's display.
                 Zoom out infinitely to view entire galaxies of community creations.
+              </p>
+            </div>
+
+            {/* Tool 9: Interactive 2D Board Games */}
+            <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-pink-500/40 transition duration-300 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400">
+                <Gamepad2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-white">9. Built-in 2D Board Games</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Drop Tic-Tac-Toe, Dots &amp; Boxes (3×3–6×6), or Connect Four anywhere on the canvas via the Plus (+) icon.
+                Features area physics, competitive turn locks, and Pass &amp; Play.
               </p>
             </div>
           </div>
