@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Rocket,
@@ -932,8 +933,39 @@ export default function BlogGuide({
       </main>
 
       {/* Footer */}
-      <footer className="py-6 border-t border-slate-800/80 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/40">
-        <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
+      <footer className="py-6 border-t border-slate-800/80 text-center text-xs text-slate-400 backdrop-blur-md bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between px-6 sm:px-12 gap-4">
+        <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel &amp; Render Synchronized.</p>
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs">
+          <Link href="/about" className="text-slate-400 hover:text-white transition">
+            About
+          </Link>
+          <span className="text-slate-700">•</span>
+          <button
+            onClick={() => handleTabChange('story')}
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Founder&apos;s Story
+          </button>
+          <span className="text-slate-700">•</span>
+          <button
+            onClick={() => handleTabChange('guide')}
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            User Guide
+          </button>
+          <span className="text-slate-700">•</span>
+          <Link href="/privacy" className="text-slate-400 hover:text-white transition">
+            Privacy Policy
+          </Link>
+          <span className="text-slate-700">•</span>
+          <Link href="/terms" className="text-slate-400 hover:text-white transition">
+            Terms
+          </Link>
+          <span className="text-slate-700">•</span>
+          <Link href="/contact" className="text-slate-400 hover:text-white transition">
+            Contact
+          </Link>
+        </div>
       </footer>
     </div>
   );

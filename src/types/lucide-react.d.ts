@@ -74,6 +74,19 @@ declare module 'lucide-react' {
   export const RotateCcw: LucideIcon;
   export const Upload: LucideIcon;
   export const Link: LucideIcon;
+  export const Mail: LucideIcon;
+  export const Send: LucideIcon;
+  export const CheckCircle2: LucideIcon;
+  export const CheckCircle: LucideIcon;
+  export const Lock: LucideIcon;
+  export const Eye: LucideIcon;
+  export const Database: LucideIcon;
+  export const Cookie: LucideIcon;
+  export const AlertTriangle: LucideIcon;
+  export const Scale: LucideIcon;
+  export const Shield: LucideIcon;
+  export const Heart: LucideIcon;
+  export const Code2: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };
   export default icons;

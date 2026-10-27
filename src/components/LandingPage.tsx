@@ -666,26 +666,54 @@ export default function LandingPage({ onEnterCanvas, onOpenBlog }: LandingPagePr
           </div>
           <p>© 2026 Endlessync. Infinite Collaborative Universe. Vercel & Render Synchronized.</p>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs">
+          <Link
+            href="/about"
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            About
+          </Link>
+          <span className="text-slate-700">•</span>
           <button
             onClick={() => handleOpenBlog('story')}
             className="text-slate-400 hover:text-white transition cursor-pointer"
           >
-            Founder's Story
+            Founder&apos;s Story
           </button>
           <span className="text-slate-700">•</span>
           <button
             onClick={() => handleOpenBlog('guide')}
-            className="text-cyan-400 hover:text-cyan-300 transition underline underline-offset-4 cursor-pointer font-medium"
+            className="text-slate-400 hover:text-white transition cursor-pointer"
           >
-            Official User Guide →
+            User Guide
           </button>
+          <span className="text-slate-700">•</span>
+          <Link
+            href="/privacy"
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Privacy Policy
+          </Link>
+          <span className="text-slate-700">•</span>
+          <Link
+            href="/terms"
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Terms of Service
+          </Link>
+          <span className="text-slate-700">•</span>
+          <Link
+            href="/contact"
+            className="text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Contact
+          </Link>
           <span className="text-slate-700">•</span>
           <button
             onClick={handleEnterCanvas}
-            className="text-slate-300 hover:text-white transition cursor-pointer font-medium"
+            className="text-cyan-400 hover:text-cyan-300 transition cursor-pointer font-medium"
           >
-            Launch Canvas
+            Launch Canvas →
           </button>
         </div>
       </footer>
